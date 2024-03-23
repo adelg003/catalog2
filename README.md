@@ -32,7 +32,7 @@ Now I know what you are thinking:
 > So here it is, folks: a web UI application that combines the complexity of Rust, the reckless abandon of HTMX, and the sheer audacity of exposing both REST and Web UI interfaces.
 > Truly, a masterpiece of modern mediocrity.
 
-/- ChatGPT
+\- ChatGPT
 
 Thanks ChatGPT for that... introduction?
 
