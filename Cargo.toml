@@ -1,0 +1,17 @@
+[package]
+name = "catalog2"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+askama = "0.12.1"
+color-eyre = "0.6.3"
+dotenvy = "0.15.7"
+poem = { version = "2.0.1", features = ["eyre06", "static-files"] }
+poem-openapi = { version = "4.0.1", features = ["swagger-ui"] }
+serde = "1.0.197"
+sqlx = { version = "0.7.4", features = ["postgres", "json", "runtime-tokio"] }
+tokio = { version = "1.36.0", features = ["rt-multi-thread"] }
+tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
