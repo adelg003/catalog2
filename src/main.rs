@@ -1,13 +1,23 @@
 mod api;
+mod auth;
+mod core;
+mod db;
 
-use crate::api::Api;
+use crate::{api::Api, auth::UserCred};
 use color_eyre::eyre;
+use jsonwebtoken::{DecodingKey, EncodingKey};
 use poem::{
     endpoint::StaticFilesEndpoint, listener::TcpListener, middleware::Tracing, EndpointExt, Route,
     Server,
 };
 use poem_openapi::OpenApiService;
 use sqlx::{migrate, PgPool};
+
+/// Read an environment variable or fall back to .env file
+fn read_env_var(env_var: &str) -> Result<String, dotenvy::Error> {
+    let var_str = std::env::var(env_var).unwrap_or(dotenvy::var(env_var)?);
+    Ok(var_str)
+}
 
 #[tokio::main]
 async fn main() -> Result<(), eyre::Error> {
@@ -20,10 +30,15 @@ async fn main() -> Result<(), eyre::Error> {
         .init();
 
     // Read the configs from Env Variable and then fall back to the .env file.
-    let conn_env_var = "DATABASE_URL";
-    let conn_str = std::env::var(conn_env_var).unwrap_or(dotenvy::var(conn_env_var)?);
-    let web_addr_env_var = "WEB_URL";
-    let web_addr_str = std::env::var(web_addr_env_var).unwrap_or(dotenvy::var(web_addr_env_var)?);
+    let conn_str = read_env_var("DATABASE_URL")?;
+    let web_addr_str = read_env_var("WEB_URL")?;
+    let user_creds: Vec<UserCred> = serde_json::from_str(&read_env_var("USER_CREDS")?)?;
+
+    // Generate the encoding and decoding JWT keys
+    let jwt_key = read_env_var("JWT_KEY")?;
+    let jwt_key = jwt_key.as_bytes();
+    let encoding_key = EncodingKey::from_secret(jwt_key);
+    let decoding_key = DecodingKey::from_secret(jwt_key);
 
     // Connect to DB and upgrade if needed.
     let pool = PgPool::connect(&conn_str).await?;
@@ -49,6 +64,9 @@ async fn main() -> Result<(), eyre::Error> {
         //.at("/", index)
         // Global context to be shared
         .data(pool)
+        .data(user_creds)
+        .data(encoding_key)
+        .data(decoding_key)
         // Utilites being added to our services
         .with(Tracing);
 

@@ -2,28 +2,28 @@
 CREATE TABLE domain (
   id SERIAL PRIMARY KEY,
   domain TEXT NOT NULL UNIQUE,
-  notes JSONB,
+  extra JSONB,
   created_by TEXT NOT NULL,
-  created_date TIMESTAMP NOT NULL,
+  created_date TIMESTAMPTZ NOT NULL,
   modified_by TEXT NOT NULL,
-  modified_date TIMESTAMP NOT NULL
+  modified_date TIMESTAMPTZ NOT NULL
 );
 
 CREATE TABLE model (
   id SERIAL PRIMARY KEY,
   model TEXT NOT NULL UNIQUE,
-  domain TEXT NOT NULL,
-  notes JSONB,
+  domain_id INTEGER NOT NULL,
+  extra JSONB,
   created_by TEXT NOT NULL,
-  created_date TIMESTAMP NOT NULL,
+  created_date TIMESTAMPTZ NOT NULL,
   modified_by TEXT NOT NULL,
-  modified_date TIMESTAMP NOT NULL,
-  FOREIGN KEY(domain) REFERENCES domain(domain)
+  modified_date TIMESTAMPTZ NOT NULL,
+  FOREIGN KEY(domain_id) REFERENCES domain(id)
 );
 
 CREATE TABLE schema (
   id SERIAL PRIMARY KEY,
-  model TEXT NOT NULL,
+  model_id INTEGER NOT NULL,
   field TEXT NOT NULL,
   is_primary BOOLEAN NOT NULL,
   data_type TEXT NOT NULL,
@@ -31,11 +31,11 @@ CREATE TABLE schema (
   lenth INTEGER,
   percision INTEGER,
   scale INTEGER,
-  notes JSONB,
+  extra JSONB,
   created_by TEXT NOT NULL,
-  created_date TIMESTAMP NOT NULL,
+  created_date TIMESTAMPTZ NOT NULL,
   modified_by TEXT NOT NULL,
-  modified_date TIMESTAMP NOT NULL,
-  UNIQUE (model, field),
-  FOREIGN KEY(model) REFERENCES model(model)
+  modified_date TIMESTAMPTZ NOT NULL,
+  UNIQUE (model_id, field),
+  FOREIGN KEY(model_id) REFERENCES model(id)
 );

@@ -1,3 +1,4 @@
+workspace = { members = ["password_hasher"] }
 [package]
 name = "catalog2"
 version = "0.1.0"
@@ -7,11 +8,15 @@ edition = "2021"
 
 [dependencies]
 askama = "0.12.1"
+bcrypt = "0.15.1"
+chrono = "0.4.35"
 color-eyre = "0.6.3"
 dotenvy = "0.15.7"
+jsonwebtoken = "9.3.0"
 poem = { version = "2.0.1", features = ["eyre06", "static-files"] }
-poem-openapi = { version = "4.0.1", features = ["swagger-ui"] }
+poem-openapi = { version = "4.0.1", features = ["chrono", "swagger-ui"] }
 serde = "1.0.197"
-sqlx = { version = "0.7.4", features = ["postgres", "json", "runtime-tokio"] }
+serde_json = "1.0.114"
+sqlx = { version = "0.7.4", features = ["chrono", "json", "postgres", "runtime-tokio"] }
 tokio = { version = "1.36.0", features = ["rt-multi-thread"] }
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
