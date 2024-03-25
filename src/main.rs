@@ -6,10 +6,7 @@ mod db;
 use crate::{api::Api, auth::UserCred};
 use color_eyre::eyre;
 use jsonwebtoken::{DecodingKey, EncodingKey};
-use poem::{
-    endpoint::StaticFilesEndpoint, listener::TcpListener, middleware::Tracing, EndpointExt, Route,
-    Server,
-};
+use poem::{listener::TcpListener, middleware::Tracing, EndpointExt, Route, Server};
 use poem_openapi::OpenApiService;
 use sqlx::{migrate, PgPool};
 
@@ -50,14 +47,10 @@ async fn main() -> Result<(), eyre::Error> {
     let spec = api_service.spec_endpoint();
     let swagger = api_service.swagger_ui();
 
-    // Expose static files
-    let assets = StaticFilesEndpoint::new("./assets").show_files_listing();
-
     // Route inbound traffic
     let route = Route::new()
         // Developer friendly locations
         .nest("/api", api_service)
-        .nest("/assets", assets)
         .at("/spec", spec)
         .nest("/swagger", swagger)
         // User friendly locations

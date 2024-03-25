@@ -1,5 +1,5 @@
 use crate::{
-    auth::{make_jwt, Auth, BasicAuth, TokenAuth},
+    auth::{make_jwt, Auth, TokenAuth, TokenOrBasicAuth},
     core::{domain_add, domain_read, domain_read_search, Domain, DomainParam},
 };
 use jsonwebtoken::EncodingKey;
@@ -27,7 +27,7 @@ impl Api {
     #[oai(path = "/gen_token", method = "post", tag = Tag::Auth)]
     async fn gen_token(
         &self,
-        auth: BasicAuth,
+        auth: TokenOrBasicAuth,
         Data(encoding_key): Data<&EncodingKey>,
     ) -> Result<PlainText<String>, poem::Error> {
         // Get user from authentication.

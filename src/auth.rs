@@ -22,7 +22,7 @@ struct User {
     username: String,
 }
 
-const ONE_HOUR: u64 = 3600;
+const ONE_WEEK: u64 = 60 * 60 * 24 * 7;
 
 /// Claim for JWT
 #[derive(Deserialize, Serialize)]
@@ -42,7 +42,7 @@ pub fn make_jwt(
     let claim = Claim {
         sub: username.to_string(),
         iat: get_current_timestamp(),
-        exp: get_current_timestamp() + ONE_HOUR,
+        exp: get_current_timestamp() + ONE_WEEK,
         iss: "Catalog2".to_string(),
     };
 
@@ -74,30 +74,21 @@ async fn basic_checker(req: &Request, basic: Basic) -> Option<User> {
     // Pull approved user creds
     let user_creds = req.data::<Vec<UserCred>>()?;
 
-    // Pull password hash for username
-    let hash = user_creds
+    // Pull user creds
+    let user_cred = user_creds
         .iter()
-        .filter(|user_cred| user_cred.username == basic.username)
-        .map(|user_cred| &user_cred.hash)
-        .next()?;
+        .find(|user_cred| user_cred.username == basic.username)?;
 
     // Verify password to hash
-    match verify(&basic.password, hash) {
-        // Password matched hash
-        Ok(true) => Some(User {
-            username: basic.username,
-        }),
-        // Password did not match hash
-        Ok(false) => None,
-        // Hmm, looks like the password hash in the config is bad
-        Err(_) => unreachable!(
-            "Password hash in configs is invalid for user: `{}`",
-            &basic.username
-        ),
-    }
+    let valid = verify(&basic.password, &user_cred.hash).ok()?;
+
+    // Return user if true, on None if false
+    valid.then_some(User {
+        username: basic.username,
+    })
 }
 
-/// Key Authentication
+/// Token Authentication
 #[derive(SecurityScheme)]
 #[oai(
     ty = "api_key",
@@ -108,7 +99,7 @@ async fn basic_checker(req: &Request, basic: Basic) -> Option<User> {
 pub struct TokenAuth(User);
 
 impl Auth for TokenAuth {
-    /// Return useername in BasicAuth
+    /// Return username in TokenAuth
     fn username(&self) -> &String {
         &self.0.username
     }
@@ -120,13 +111,33 @@ async fn token_checker(req: &Request, api_key: ApiKey) -> Option<User> {
     let decoding_key = req.data::<DecodingKey>()?;
 
     // Pull jwt data
-    let decode_result = decode::<Claim>(&api_key.key, decoding_key, &Validation::default());
+    let token_data = decode::<Claim>(&api_key.key, decoding_key, &Validation::default()).ok()?;
 
-    // Map decode_result to what we want to do with it
-    match decode_result {
-        Ok(token_data) => Some(User {
-            username: token_data.claims.sub,
-        }),
-        Err(_) => None,
+    // Make sure the user in the token is still valid.
+    let user_creds = req.data::<Vec<UserCred>>()?;
+    user_creds
+        .iter()
+        .find(|user_cred| user_cred.username == token_data.claims.sub)?;
+
+    // Return User from inside the token
+    Some(User {
+        username: token_data.claims.sub,
+    })
+}
+
+/// Key or Basic Auth
+#[derive(SecurityScheme)]
+pub enum TokenOrBasicAuth {
+    TokenAuth(TokenAuth),
+    BasicAuth(BasicAuth),
+}
+
+impl Auth for TokenOrBasicAuth {
+    /// Return username in TokenOrBasicAuth
+    fn username(&self) -> &String {
+        match self {
+            TokenOrBasicAuth::TokenAuth(auth) => auth.username(),
+            TokenOrBasicAuth::BasicAuth(auth) => auth.username(),
+        }
     }
 }
