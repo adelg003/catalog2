@@ -2,6 +2,7 @@
 CREATE TABLE domain (
   id SERIAL PRIMARY KEY,
   domain TEXT NOT NULL UNIQUE,
+  owner TEXT NOT NULL,
   extra JSONB,
   created_by TEXT NOT NULL,
   created_date TIMESTAMPTZ NOT NULL,
@@ -13,6 +14,7 @@ CREATE TABLE model (
   id SERIAL PRIMARY KEY,
   model TEXT NOT NULL UNIQUE,
   domain_id INTEGER NOT NULL,
+  owner TEXT NOT NULL,
   extra JSONB,
   created_by TEXT NOT NULL,
   created_date TIMESTAMPTZ NOT NULL,

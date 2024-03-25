@@ -10,23 +10,23 @@ use poem_openapi::{
 use serde::{Deserialize, Serialize};
 
 /// Struct to hold user creds
-#[derive(Clone, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct UserCred {
-    pub username: String,
-    pub hash: String,
+    username: String,
+    hash: String,
 }
 
 /// Struct to return when authenticating
-#[derive(Debug, Deserialize, Object)]
-pub struct User {
-    pub username: String,
+#[derive(Debug, Object)]
+struct User {
+    username: String,
 }
 
 const ONE_HOUR: u64 = 3600;
 
 /// Claim for JWT
 #[derive(Deserialize, Serialize)]
-pub struct Claim {
+struct Claim {
     sub: String,
     iat: u64,
     exp: u64,
@@ -51,36 +51,50 @@ pub fn make_jwt(
     Ok(token)
 }
 
+/// Trait for our auth methoids
+pub trait Auth {
+    /// All auth methods need to be able to return usernames
+    fn username(&self) -> &String;
+}
+
 /// Basic Authentication
 #[derive(SecurityScheme)]
 #[oai(ty = "basic", checker = "basic_checker")]
 pub struct BasicAuth(User);
+
+impl Auth for BasicAuth {
+    /// Return useername in BasicAuth
+    fn username(&self) -> &String {
+        &self.0.username
+    }
+}
 
 /// How we authenticate for BasicAuth
 async fn basic_checker(req: &Request, basic: Basic) -> Option<User> {
     // Pull approved user creds
     let user_creds = req.data::<Vec<UserCred>>()?;
 
-    // Lets see if any of our creds match
-    for user_cred in user_creds {
-        if basic.username == user_cred.username {
-            let verify_result = verify(&basic.password, &user_cred.hash);
+    // Pull password hash for username
+    let hash = user_creds
+        .iter()
+        .filter(|user_cred| user_cred.username == basic.username)
+        .map(|user_cred| &user_cred.hash)
+        .next()?;
 
-            // Map verify_result to what we want to do with it
-            match verify_result {
-                Ok(true) => {
-                    return Some(User {
-                        username: basic.username,
-                    })
-                }
-                Ok(false) => (),
-                Err(_) => return None,
-            };
-        }
+    // Verify password to hash
+    match verify(&basic.password, hash) {
+        // Password matched hash
+        Ok(true) => Some(User {
+            username: basic.username,
+        }),
+        // Password did not match hash
+        Ok(false) => None,
+        // Hmm, looks like the password hash in the config is bad
+        Err(_) => unreachable!(
+            "Password hash in configs is invalid for user: `{}`",
+            &basic.username
+        ),
     }
-
-    // Well, looks link nothing matches, so rejected
-    None
 }
 
 /// Key Authentication
@@ -89,12 +103,19 @@ async fn basic_checker(req: &Request, basic: Basic) -> Option<User> {
     ty = "api_key",
     key_name = "X-API-Key",
     key_in = "header",
-    checker = "jwt_checker"
+    checker = "token_checker"
 )]
-pub struct JwtAuth(User);
+pub struct TokenAuth(User);
+
+impl Auth for TokenAuth {
+    /// Return useername in BasicAuth
+    fn username(&self) -> &String {
+        &self.0.username
+    }
+}
 
 /// How JwtAuth validates a token
-async fn jwt_checker(req: &Request, api_key: ApiKey) -> Option<User> {
+async fn token_checker(req: &Request, api_key: ApiKey) -> Option<User> {
     // Pull decoding key
     let decoding_key = req.data::<DecodingKey>()?;
 
@@ -107,23 +128,5 @@ async fn jwt_checker(req: &Request, api_key: ApiKey) -> Option<User> {
             username: token_data.claims.sub,
         }),
         Err(_) => None,
-    }
-}
-
-/// Authentication for the REST API
-#[derive(SecurityScheme)]
-pub enum Auth {
-    BasicAuth(BasicAuth),
-    JwtAuth(JwtAuth),
-}
-
-impl Auth {
-    /// Pull the username if the user was authenticated
-    pub fn username(&self) -> &String {
-        // Get user from authentication.
-        match self {
-            Auth::BasicAuth(auth) => &auth.0.username,
-            Auth::JwtAuth(auth) => &auth.0.username,
-        }
     }
 }
