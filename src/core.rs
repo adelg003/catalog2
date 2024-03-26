@@ -1,5 +1,6 @@
 use crate::db::{
     domain_count, domain_drop, domain_insert, domain_select, domain_select_search, domain_update,
+    DomainRow,
 };
 use chrono::{DateTime, Utc};
 use poem::{
@@ -8,22 +9,37 @@ use poem::{
 };
 use poem_openapi::Object;
 use serde_json::Value;
-use sqlx::{FromRow, PgPool};
+use sqlx::PgPool;
 use validator::Validate;
 
 const PAGE_SIZE: u64 = 50;
 
-/// Shared Domain struct
-#[derive(FromRow, Object)]
+/// Domain to return via the API
+#[derive(Object)]
 pub struct Domain {
-    pub id: i32,
-    pub domain: String,
-    pub owner: String,
-    pub extra: Value,
-    pub created_by: String,
-    pub created_date: DateTime<Utc>,
-    pub modified_by: String,
-    pub modified_date: DateTime<Utc>,
+    id: i32,
+    domain: String,
+    owner: String,
+    extra: Value,
+    created_by: String,
+    created_date: DateTime<Utc>,
+    modified_by: String,
+    modified_date: DateTime<Utc>,
+}
+
+impl From<DomainRow> for Domain {
+    fn from(domain_row: DomainRow) -> Self {
+        Domain {
+            id: domain_row.id,
+            domain: domain_row.domain,
+            owner: domain_row.owner,
+            extra: domain_row.extra,
+            created_by: domain_row.created_by,
+            created_date: domain_row.created_date,
+            modified_by: domain_row.modified_by,
+            modified_date: domain_row.modified_date,
+        }
+    }
 }
 
 /// How to create a new domain
@@ -33,6 +49,14 @@ pub struct DomainParam {
     #[validate(email)]
     pub owner: String,
     pub extra: Value,
+}
+
+/// Domain Search Results
+#[derive(Object)]
+pub struct DomainSearch {
+    domains: Vec<Domain>,
+    page: u64,
+    more: bool,
 }
 
 /// Add a domain
@@ -61,9 +85,10 @@ pub async fn domain_add(
         .map_err(InternalServerError)?;
 
     // Pull value
-    let domain = domain_select(&mut tx, &domain_param.domain)
+    let domain: Domain = domain_select(&mut tx, &domain_param.domain)
         .await
-        .map_err(InternalServerError)?;
+        .map_err(InternalServerError)?
+        .into();
 
     // Commit Transaction
     tx.commit().await.map_err(InternalServerError)?;
@@ -77,9 +102,10 @@ pub async fn domain_read(pool: &PgPool, domain_name: &str) -> Result<Domain, poe
     let mut tx = pool.begin().await.map_err(InternalServerError)?;
 
     // Pull domain
-    let domain = domain_select(&mut tx, domain_name)
+    let domain: Domain = domain_select(&mut tx, domain_name)
         .await
-        .map_err(NotFound)?;
+        .map_err(NotFound)?
+        .into();
 
     Ok(domain)
 }
@@ -91,21 +117,35 @@ pub async fn domain_read_search(
     owner: &Option<String>,
     extra: &Option<String>,
     page: &u64,
-) -> Result<Vec<Domain>, poem::Error> {
+) -> Result<DomainSearch, poem::Error> {
     // Compute offset
     let offset = page * PAGE_SIZE;
+    let next_offset = (page + 1) * PAGE_SIZE;
 
     // Start Transaction
     let mut tx = pool.begin().await.map_err(InternalServerError)?;
 
     // Pull the Domains
-    let domains = domain_select_search(&mut tx, domain_name, owner, extra, &PAGE_SIZE, &offset)
+    let domain_rows = domain_select_search(&mut tx, domain_name, owner, extra, &PAGE_SIZE, &offset)
         .await
         .map_err(InternalServerError)?;
 
-    //TODO add support if more fields present
+    // Change from DB Struct to API struct
+    let domains: Vec<Domain> = domain_rows.into_iter().map(|row| row.into()).collect();
 
-    Ok(domains)
+    // More domains present?
+    let next_domain_rows =
+        domain_select_search(&mut tx, domain_name, owner, extra, &PAGE_SIZE, &next_offset)
+            .await
+            .map_err(InternalServerError)?;
+
+    let more = !next_domain_rows.is_empty();
+
+    Ok(DomainSearch {
+        domains,
+        page: *page,
+        more,
+    })
 }
 
 /// Edit a Domain
@@ -129,9 +169,10 @@ pub async fn domain_edit(
         .map_err(Conflict)?;
 
     // Pull domain
-    let domain = domain_select(&mut tx, &domain_param.domain)
+    let domain: Domain = domain_select(&mut tx, &domain_param.domain)
         .await
-        .map_err(InternalServerError)?;
+        .map_err(InternalServerError)?
+        .into();
 
     // Commit Transaction
     tx.commit().await.map_err(InternalServerError)?;
@@ -145,9 +186,10 @@ pub async fn domain_remove(pool: &PgPool, domain_name: &str) -> Result<Domain, p
     let mut tx = pool.begin().await.map_err(InternalServerError)?;
 
     // Check to make sure domain already exists
-    let domain = domain_select(&mut tx, domain_name)
+    let domain: Domain = domain_select(&mut tx, domain_name)
         .await
-        .map_err(NotFound)?;
+        .map_err(NotFound)?
+        .into();
 
     //TODO add cascade
 

@@ -1,6 +1,20 @@
-use crate::core::{Domain, DomainParam};
-use chrono::Utc;
-use sqlx::{query, query_as, Postgres, QueryBuilder, Transaction};
+use crate::core::DomainParam;
+use chrono::{DateTime, Utc};
+use serde_json::Value;
+use sqlx::{prelude::FromRow, query, query_as, Postgres, QueryBuilder, Transaction};
+
+/// Row from the Domain table
+#[derive(FromRow)]
+pub struct DomainRow {
+    pub id: i32,
+    pub domain: String,
+    pub owner: String,
+    pub extra: Value,
+    pub created_by: String,
+    pub created_date: DateTime<Utc>,
+    pub modified_by: String,
+    pub modified_date: DateTime<Utc>,
+}
 
 /// Struct for counting rows returned
 struct Counter {
@@ -50,9 +64,9 @@ pub async fn domain_insert(
 pub async fn domain_select(
     tx: &mut Transaction<'_, Postgres>,
     domain_name: &str,
-) -> Result<Domain, sqlx::Error> {
+) -> Result<DomainRow, sqlx::Error> {
     let domain = query_as!(
-        Domain,
+        DomainRow,
         "SELECT
             id,
             domain,
@@ -82,7 +96,7 @@ pub async fn domain_select_search(
     extra: &Option<String>,
     limit: &u64,
     offset: &u64,
-) -> Result<Vec<Domain>, sqlx::Error> {
+) -> Result<Vec<DomainRow>, sqlx::Error> {
     // Query we will be modifying
     let mut query = QueryBuilder::<'_, Postgres>::new(
         "SELECT
@@ -126,7 +140,7 @@ pub async fn domain_select_search(
 
     // Run our generated SQL statement
     let domains = query
-        .build_query_as::<Domain>()
+        .build_query_as::<DomainRow>()
         .fetch_all(&mut **tx)
         .await?;
 

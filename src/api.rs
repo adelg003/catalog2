@@ -2,7 +2,7 @@ use crate::{
     auth::{make_jwt, Auth, TokenAuth, TokenOrBasicAuth},
     core::{
         domain_add, domain_edit, domain_read, domain_read_search, domain_remove, Domain,
-        DomainParam,
+        DomainParam, DomainSearch,
     },
 };
 use jsonwebtoken::EncodingKey;
@@ -81,14 +81,14 @@ impl Api {
         Query(owner): Query<Option<String>>,
         Query(extra): Query<Option<String>>,
         Query(page): Query<Option<u64>>,
-    ) -> Result<Json<Vec<Domain>>, poem::Error> {
+    ) -> Result<Json<DomainSearch>, poem::Error> {
         // Default no page to 0
         let page = page.unwrap_or(0);
 
         // Pull domain
-        let domains = domain_read_search(pool, &domain_name, &owner, &extra, &page).await?;
+        let domain_search = domain_read_search(pool, &domain_name, &owner, &extra, &page).await?;
 
-        Ok(Json(domains))
+        Ok(Json(domain_search))
     }
 
     /// Change a domain to the domain table
