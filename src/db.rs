@@ -1,6 +1,5 @@
-use crate::core::DomainParam;
+use crate::core::{DomainParam, ModelParam};
 use chrono::{DateTime, Utc};
-use serde_json::Value;
 use sqlx::{prelude::FromRow, query, query_as, Postgres, QueryBuilder, Transaction};
 
 /// Row from the Domain table
@@ -9,16 +8,25 @@ pub struct DomainRow {
     pub id: i32,
     pub domain: String,
     pub owner: String,
-    pub extra: Value,
+    pub extra: serde_json::Value,
     pub created_by: String,
     pub created_date: DateTime<Utc>,
     pub modified_by: String,
     pub modified_date: DateTime<Utc>,
 }
 
-/// Struct for counting rows returned
-struct Counter {
-    count: Option<i64>,
+#[derive(FromRow)]
+pub struct ModelRow {
+    pub id: i32,
+    pub model: String,
+    pub domain_id: i32,
+    pub domain: String,
+    pub owner: String,
+    pub extra: serde_json::Value,
+    pub created_by: String,
+    pub created_date: DateTime<Utc>,
+    pub modified_by: String,
+    pub modified_date: DateTime<Utc>,
 }
 
 /// Add a domain to the domain table
@@ -65,7 +73,7 @@ pub async fn domain_select(
     tx: &mut Transaction<'_, Postgres>,
     domain_name: &str,
 ) -> Result<DomainRow, sqlx::Error> {
-    let domain = query_as!(
+    let domain_row = query_as!(
         DomainRow,
         "SELECT
             id,
@@ -85,7 +93,7 @@ pub async fn domain_select(
     .fetch_one(&mut **tx)
     .await?;
 
-    Ok(domain)
+    Ok(domain_row)
 }
 
 /// Pull multiple domains is the match the criteria
@@ -94,8 +102,8 @@ pub async fn domain_select_search(
     domain_name: &Option<String>,
     owner: &Option<String>,
     extra: &Option<String>,
-    limit: &u64,
-    offset: &u64,
+    limit: &Option<u64>,
+    offset: &Option<u64>,
 ) -> Result<Vec<DomainRow>, sqlx::Error> {
     // Query we will be modifying
     let mut query = QueryBuilder::<'_, Postgres>::new(
@@ -135,39 +143,26 @@ pub async fn domain_select_search(
         }
     }
 
-    // Add ORDER, LIMIT, and OFFSET to our SQL statement
-    query.push(format!(" ORDER BY id LIMIT {} OFFSET {}", limit, offset));
+    // Add ORDER BY
+    query.push(" ORDER BY id ");
+
+    // Add LIMIT
+    if let Some(limit) = limit {
+        query.push(format!(" LIMIT {} ", limit));
+
+        // Add OFFSET
+        if let Some(offset) = offset {
+            query.push(format!(" OFFSET {} ", offset));
+        }
+    }
 
     // Run our generated SQL statement
-    let domains = query
+    let domain_rows = query
         .build_query_as::<DomainRow>()
         .fetch_all(&mut **tx)
         .await?;
 
-    Ok(domains)
-}
-
-/// How many domain exists with a given name
-pub async fn domain_count(
-    tx: &mut Transaction<'_, Postgres>,
-    domain_name: &str,
-) -> Result<i64, sqlx::Error> {
-    let counter = query_as!(
-        Counter,
-        "SELECT
-            COUNT(*) as count
-        FROM
-            domain
-        WHERE
-            domain = $1",
-        domain_name,
-    )
-    .fetch_one(&mut **tx)
-    .await?;
-
-    let count = counter.count.unwrap_or(0);
-
-    Ok(count)
+    Ok(domain_rows)
 }
 
 /// Update a domain
@@ -219,4 +214,80 @@ pub async fn domain_drop(
     .rows_affected();
 
     Ok(rows_affected)
+}
+
+/// Add a model to the model table
+pub async fn model_insert(
+    tx: &mut Transaction<'_, Postgres>,
+    model_param: &ModelParam,
+    domain_id: &i32,
+    username: &str,
+) -> Result<u64, sqlx::Error> {
+    let rows_affected = query!(
+        "INSERT INTO model (
+            model,
+            domain_id,
+            owner,
+            extra,
+            created_by,
+            created_date,
+            modified_by,
+            modified_date
+        ) VALUES (
+            $1,
+            $2,
+            $3,
+            $4,
+            $5,
+            $6,
+            $7,
+            $8
+        )",
+        model_param.model,
+        domain_id,
+        model_param.owner,
+        model_param.extra,
+        username,
+        Utc::now(),
+        username,
+        Utc::now(),
+    )
+    .execute(&mut **tx)
+    .await?
+    .rows_affected();
+
+    Ok(rows_affected)
+}
+/// Pull one model
+pub async fn model_select(
+    tx: &mut Transaction<'_, Postgres>,
+    model_name: &str,
+) -> Result<ModelRow, sqlx::Error> {
+    let model_row = query_as!(
+        ModelRow,
+        "SELECT
+            model.id,
+            model.model,
+            model.domain_id,
+            domain.domain,
+            model.owner,
+            model.extra,
+            model.created_by,
+            model.created_date,
+            model.modified_by,
+            model.modified_date
+        FROM
+            model
+        LEFT JOIN
+            domain
+        on
+            model.domain_id = domain.id 
+        WHERE
+            model = $1",
+        model_name,
+    )
+    .fetch_one(&mut **tx)
+    .await?;
+
+    Ok(model_row)
 }

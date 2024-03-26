@@ -1,8 +1,8 @@
 use crate::{
     auth::{make_jwt, Auth, TokenAuth, TokenOrBasicAuth},
     core::{
-        domain_add, domain_edit, domain_read, domain_read_search, domain_remove, Domain,
-        DomainParam, DomainSearch,
+        domain_add, domain_edit, domain_read, domain_read_search, domain_remove, model_add,
+        model_read, Domain, DomainParam, DomainSearch, Model, ModelParam,
     },
 };
 use jsonwebtoken::EncodingKey;
@@ -18,7 +18,8 @@ use sqlx::PgPool;
 enum Tag {
     Auth,
     //TODO Component,
-    JsonApi,
+    Domain,
+    Model,
 }
 
 /// Struct we will build our REST API / Webserver
@@ -43,7 +44,7 @@ impl Api {
     }
 
     /// Add a domain to the domain table
-    #[oai(path = "/domain", method = "post", tag = Tag::JsonApi)]
+    #[oai(path = "/domain", method = "post", tag = Tag::Domain)]
     async fn domain_post(
         &self,
         auth: TokenAuth,
@@ -60,7 +61,7 @@ impl Api {
     }
 
     /// Get a single domain
-    #[oai(path = "/domain/:domain_name", method = "get", tag = Tag::JsonApi)]
+    #[oai(path = "/domain/:domain_name", method = "get", tag = Tag::Domain)]
     async fn domain_get(
         &self,
         Data(pool): Data<&PgPool>,
@@ -73,7 +74,7 @@ impl Api {
     }
 
     /// Search domains
-    #[oai(path = "/domain_search", method = "get", tag = Tag::JsonApi)]
+    #[oai(path = "/domain_search", method = "get", tag = Tag::Domain)]
     async fn domain_get_search(
         &self,
         Data(pool): Data<&PgPool>,
@@ -92,7 +93,7 @@ impl Api {
     }
 
     /// Change a domain to the domain table
-    #[oai(path = "/domain/:domain_name", method = "put", tag = Tag::JsonApi)]
+    #[oai(path = "/domain/:domain_name", method = "put", tag = Tag::Domain)]
     async fn domain_put(
         &self,
         auth: TokenAuth,
@@ -110,7 +111,7 @@ impl Api {
     }
 
     /// Delete a domain
-    #[oai(path = "/domain/:domain_name", method = "delete", tag = Tag::JsonApi)]
+    #[oai(path = "/domain/:domain_name", method = "delete", tag = Tag::Domain)]
     async fn domain_delete(
         &self,
         Data(pool): Data<&PgPool>,
@@ -120,5 +121,35 @@ impl Api {
         let domain = domain_remove(pool, &domain_name).await?;
 
         Ok(Json(domain))
+    }
+
+    /// Add a model to the model table
+    #[oai(path = "/model", method = "post", tag = Tag::Model)]
+    async fn model_post(
+        &self,
+        auth: TokenAuth,
+        Data(pool): Data<&PgPool>,
+        Json(model_param): Json<ModelParam>,
+    ) -> Result<Json<Model>, poem::Error> {
+        // Get user from authentication.
+        let username = auth.username();
+
+        // Run Domain add logic
+        let model = model_add(pool, &model_param, username).await?;
+
+        Ok(Json(model))
+    }
+
+    /// Get a single model
+    #[oai(path = "/model/:model_name", method = "get", tag = Tag::Model)]
+    async fn model_get(
+        &self,
+        Data(pool): Data<&PgPool>,
+        Path(model_name): Path<String>,
+    ) -> Result<Json<Model>, poem::Error> {
+        // Pull model
+        let model = model_read(pool, &model_name).await?;
+
+        Ok(Json(model))
     }
 }
