@@ -1,7 +1,9 @@
-use crate::db::{domain_count, domain_insert, domain_select, domain_select_search};
+use crate::db::{
+    domain_count, domain_drop, domain_insert, domain_select, domain_select_search, domain_update,
+};
 use chrono::{DateTime, Utc};
 use poem::{
-    error::{BadRequest, InternalServerError, NotFound},
+    error::{BadRequest, Conflict, InternalServerError, NotFound},
     http::StatusCode,
 };
 use poem_openapi::Object;
@@ -27,26 +29,26 @@ pub struct Domain {
 /// How to create a new domain
 #[derive(Object, Validate)]
 pub struct DomainParam {
-    domain_name: String,
+    pub domain: String,
     #[validate(email)]
-    owner: String,
-    extra: Value,
+    pub owner: String,
+    pub extra: Value,
 }
 
 /// Add a domain
 pub async fn domain_add(
     pool: &PgPool,
-    parm: &DomainParam,
-    username: &String,
+    domain_param: &DomainParam,
+    username: &str,
 ) -> Result<Domain, poem::Error> {
     // Make sure the payload we got is good (check with Validate package).
-    parm.validate().map_err(BadRequest)?;
+    domain_param.validate().map_err(BadRequest)?;
 
     // Start Transaction
     let mut tx = pool.begin().await.map_err(InternalServerError)?;
 
     // Check if domain already exists
-    let count = domain_count(&mut tx, &parm.domain_name)
+    let count = domain_count(&mut tx, &domain_param.domain)
         .await
         .map_err(InternalServerError)?;
     if count >= 1 {
@@ -54,18 +56,12 @@ pub async fn domain_add(
     }
 
     // Add new domain
-    domain_insert(
-        &mut tx,
-        &parm.domain_name,
-        &parm.owner,
-        &parm.extra,
-        username,
-    )
-    .await
-    .map_err(InternalServerError)?;
+    domain_insert(&mut tx, domain_param, username)
+        .await
+        .map_err(InternalServerError)?;
 
     // Pull value
-    let domain = domain_select(&mut tx, &parm.domain_name)
+    let domain = domain_select(&mut tx, &domain_param.domain)
         .await
         .map_err(InternalServerError)?;
 
@@ -76,7 +72,7 @@ pub async fn domain_add(
 }
 
 /// Read details of a domain
-pub async fn domain_read(pool: &PgPool, domain_name: &String) -> Result<Domain, poem::Error> {
+pub async fn domain_read(pool: &PgPool, domain_name: &str) -> Result<Domain, poem::Error> {
     // Start Transaction
     let mut tx = pool.begin().await.map_err(InternalServerError)?;
 
@@ -107,5 +103,64 @@ pub async fn domain_read_search(
         .await
         .map_err(InternalServerError)?;
 
+    //TODO add support if more fields present
+
     Ok(domains)
+}
+
+/// Edit a Domain
+pub async fn domain_edit(
+    pool: &PgPool,
+    domain_name: &str,
+    domain_param: &DomainParam,
+    username: &str,
+) -> Result<Domain, poem::Error> {
+    // Start Transaction
+    let mut tx = pool.begin().await.map_err(InternalServerError)?;
+
+    // Check to make sure domain already exists
+    domain_select(&mut tx, domain_name)
+        .await
+        .map_err(NotFound)?;
+
+    // Update domain
+    domain_update(&mut tx, domain_name, domain_param, username)
+        .await
+        .map_err(Conflict)?;
+
+    // Pull domain
+    let domain = domain_select(&mut tx, &domain_param.domain)
+        .await
+        .map_err(InternalServerError)?;
+
+    // Commit Transaction
+    tx.commit().await.map_err(InternalServerError)?;
+
+    Ok(domain)
+}
+
+/// Remove a Domain
+pub async fn domain_remove(pool: &PgPool, domain_name: &str) -> Result<Domain, poem::Error> {
+    // Start Transaction
+    let mut tx = pool.begin().await.map_err(InternalServerError)?;
+
+    // Check to make sure domain already exists
+    let domain = domain_select(&mut tx, domain_name)
+        .await
+        .map_err(NotFound)?;
+
+    //TODO add cascade
+
+    //TODO - Make sure no models exists for this domain
+    //TODO Raise Conflict
+
+    // Delete the domain
+    domain_drop(&mut tx, domain_name)
+        .await
+        .map_err(InternalServerError)?;
+
+    // Commit Transaction
+    tx.commit().await.map_err(InternalServerError)?;
+
+    Ok(domain)
 }

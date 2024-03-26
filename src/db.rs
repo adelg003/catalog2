@@ -1,6 +1,5 @@
-use crate::core::Domain;
+use crate::core::{Domain, DomainParam};
 use chrono::Utc;
-use serde_json::Value;
 use sqlx::{query, query_as, Postgres, QueryBuilder, Transaction};
 
 /// Struct for counting rows returned
@@ -11,10 +10,8 @@ struct Counter {
 /// Add a domain to the domain table
 pub async fn domain_insert(
     tx: &mut Transaction<'_, Postgres>,
-    domain_name: &String,
-    owner: &String,
-    extra: &Value,
-    user: &String,
+    domain_param: &DomainParam,
+    username: &str,
 ) -> Result<u64, sqlx::Error> {
     let rows_affected = query!(
         "INSERT INTO domain (
@@ -34,12 +31,12 @@ pub async fn domain_insert(
             $6,
             $7
         )",
-        domain_name,
-        owner,
-        extra,
-        user,
+        domain_param.domain,
+        domain_param.owner,
+        domain_param.extra,
+        username,
         Utc::now(),
-        user,
+        username,
         Utc::now(),
     )
     .execute(&mut **tx)
@@ -52,7 +49,7 @@ pub async fn domain_insert(
 /// Pull one domain
 pub async fn domain_select(
     tx: &mut Transaction<'_, Postgres>,
-    domain_name: &String,
+    domain_name: &str,
 ) -> Result<Domain, sqlx::Error> {
     let domain = query_as!(
         Domain,
@@ -139,7 +136,7 @@ pub async fn domain_select_search(
 /// How many domain exists with a given name
 pub async fn domain_count(
     tx: &mut Transaction<'_, Postgres>,
-    domain_name: &String,
+    domain_name: &str,
 ) -> Result<i64, sqlx::Error> {
     let counter = query_as!(
         Counter,
@@ -157,4 +154,55 @@ pub async fn domain_count(
     let count = counter.count.unwrap_or(0);
 
     Ok(count)
+}
+
+/// Update a domain
+pub async fn domain_update(
+    tx: &mut Transaction<'_, Postgres>,
+    domain_name: &str,
+    domain_param: &DomainParam,
+    username: &str,
+) -> Result<u64, sqlx::Error> {
+    let rows_affected = query!(
+        "UPDATE
+            domain
+        SET 
+            domain = $1,
+            owner = $2,
+            extra = $3,
+            modified_by = $4,
+            modified_date = $5
+        WHERE
+            domain = $6",
+        domain_param.domain,
+        domain_param.owner,
+        domain_param.extra,
+        username,
+        Utc::now(),
+        domain_name,
+    )
+    .execute(&mut **tx)
+    .await?
+    .rows_affected();
+
+    Ok(rows_affected)
+}
+
+/// Delete a domain
+pub async fn domain_drop(
+    tx: &mut Transaction<'_, Postgres>,
+    domain_name: &str,
+) -> Result<u64, sqlx::Error> {
+    let rows_affected = query!(
+        "DELETE FROM
+            domain
+        WHERE
+            domain = $1",
+        domain_name,
+    )
+    .execute(&mut **tx)
+    .await?
+    .rows_affected();
+
+    Ok(rows_affected)
 }

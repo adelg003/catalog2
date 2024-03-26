@@ -1,6 +1,9 @@
 use crate::{
     auth::{make_jwt, Auth, TokenAuth, TokenOrBasicAuth},
-    core::{domain_add, domain_read, domain_read_search, Domain, DomainParam},
+    core::{
+        domain_add, domain_edit, domain_read, domain_read_search, domain_remove, Domain,
+        DomainParam,
+    },
 };
 use jsonwebtoken::EncodingKey;
 use poem::{error::InternalServerError, web::Data};
@@ -45,13 +48,13 @@ impl Api {
         &self,
         auth: TokenAuth,
         Data(pool): Data<&PgPool>,
-        Json(param): Json<DomainParam>,
+        Json(domain_param): Json<DomainParam>,
     ) -> Result<Json<Domain>, poem::Error> {
         // Get user from authentication.
         let username = auth.username();
 
         // Run Domain add logic
-        let domain = domain_add(pool, &param, username).await?;
+        let domain = domain_add(pool, &domain_param, username).await?;
 
         Ok(Json(domain))
     }
@@ -86,5 +89,36 @@ impl Api {
         let domains = domain_read_search(pool, &domain_name, &owner, &extra, &page).await?;
 
         Ok(Json(domains))
+    }
+
+    /// Change a domain to the domain table
+    #[oai(path = "/domain/:domain_name", method = "put", tag = Tag::JsonApi)]
+    async fn domain_put(
+        &self,
+        auth: TokenAuth,
+        Data(pool): Data<&PgPool>,
+        Path(domain_name): Path<String>,
+        Json(domain_param): Json<DomainParam>,
+    ) -> Result<Json<Domain>, poem::Error> {
+        // Get user from authentication.
+        let username = auth.username();
+
+        // Run Domain add logic
+        let domain = domain_edit(pool, &domain_name, &domain_param, username).await?;
+
+        Ok(Json(domain))
+    }
+
+    /// Delete a domain
+    #[oai(path = "/domain/:domain_name", method = "delete", tag = Tag::JsonApi)]
+    async fn domain_delete(
+        &self,
+        Data(pool): Data<&PgPool>,
+        Path(domain_name): Path<String>,
+    ) -> Result<Json<Domain>, poem::Error> {
+        // Pull domain
+        let domain = domain_remove(pool, &domain_name).await?;
+
+        Ok(Json(domain))
     }
 }
