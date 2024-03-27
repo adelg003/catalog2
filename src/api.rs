@@ -2,8 +2,10 @@ use crate::{
     auth::{make_jwt, Auth, TokenAuth, TokenOrBasicAuth},
     core::{
         domain_add, domain_edit, domain_read, domain_read_search, domain_remove, model_add,
-        model_read, Domain, DomainParam, DomainSearch, Model, ModelParam,
+        model_edit, model_read, model_read_search, model_remove, DomainModel, DomainParam,
+        DomainSearch, ModelParam, ModelSearch,
     },
+    db::{Domain, Model},
 };
 use jsonwebtoken::EncodingKey;
 use poem::{error::InternalServerError, web::Data};
@@ -66,7 +68,7 @@ impl Api {
         &self,
         Data(pool): Data<&PgPool>,
         Path(domain_name): Path<String>,
-    ) -> Result<Json<Domain>, poem::Error> {
+    ) -> Result<Json<DomainModel>, poem::Error> {
         // Pull domain
         let domain = domain_read(pool, &domain_name).await?;
 
@@ -152,4 +154,58 @@ impl Api {
 
         Ok(Json(model))
     }
+
+    /// Search models
+    #[oai(path = "/model_search", method = "get", tag = Tag::Model)]
+    async fn model_get_search(
+        &self,
+        Data(pool): Data<&PgPool>,
+        Query(model_name): Query<Option<String>>,
+        Query(domain_name): Query<Option<String>>,
+        Query(owner): Query<Option<String>>,
+        Query(extra): Query<Option<String>>,
+        Query(page): Query<Option<u64>>,
+    ) -> Result<Json<ModelSearch>, poem::Error> {
+        // Default no page to 0
+        let page = page.unwrap_or(0);
+
+        // Pull models
+        let model_search =
+            model_read_search(pool, &model_name, &domain_name, &owner, &extra, &page).await?;
+
+        Ok(Json(model_search))
+    }
+
+    /// Change a model to the model table
+    #[oai(path = "/model/:model_name", method = "put", tag = Tag::Model)]
+    async fn model_put(
+        &self,
+        auth: TokenAuth,
+        Data(pool): Data<&PgPool>,
+        Path(model_name): Path<String>,
+        Json(model_param): Json<ModelParam>,
+    ) -> Result<Json<Model>, poem::Error> {
+        // Get user from authentication.
+        let username = auth.username();
+
+        // Run Model add logic
+        let model = model_edit(pool, &model_name, &model_param, username).await?;
+
+        Ok(Json(model))
+    }
+
+    /// Delete a model
+    #[oai(path = "/model/:model_name", method = "delete", tag = Tag::Model)]
+    async fn model_delete(
+        &self,
+        Data(pool): Data<&PgPool>,
+        Path(model_name): Path<String>,
+    ) -> Result<Json<Model>, poem::Error> {
+        // Pull domain
+        let model = model_remove(pool, &model_name).await?;
+
+        Ok(Json(model))
+    }
 }
+
+//TODO Add integration test

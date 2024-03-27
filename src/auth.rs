@@ -141,3 +141,5 @@ impl Auth for TokenOrBasicAuth {
         }
     }
 }
+
+//TODO Add Unit Test
