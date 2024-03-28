@@ -1,11 +1,11 @@
 use crate::{
     auth::{make_jwt, Auth, TokenAuth, TokenOrBasicAuth},
     core::{
-        domain_add, domain_edit, domain_read, domain_read_search, domain_remove, model_add,
-        model_edit, model_read, model_read_search, model_remove, DomainModel, DomainParam,
-        DomainSearch, ModelParam, ModelSearch,
+        domain_add, domain_edit, domain_models_read, domain_read, domain_read_search,
+        domain_remove, model_add, model_edit, model_read, model_read_search, model_remove,
+        DomainSearch, ModelSearch,
     },
-    db::{Domain, Model},
+    db::{Domain, DomainModels, DomainParam, Model, ModelParam},
 };
 use jsonwebtoken::EncodingKey;
 use poem::{error::InternalServerError, web::Data};
@@ -68,9 +68,22 @@ impl Api {
         &self,
         Data(pool): Data<&PgPool>,
         Path(domain_name): Path<String>,
-    ) -> Result<Json<DomainModel>, poem::Error> {
+    ) -> Result<Json<Domain>, poem::Error> {
         // Pull domain
         let domain = domain_read(pool, &domain_name).await?;
+
+        Ok(Json(domain))
+    }
+
+    /// Get a single domain and its models
+    #[oai(path = "/domain_with_models/:domain_name", method = "get", tag = Tag::Domain)]
+    async fn domain_models_get(
+        &self,
+        Data(pool): Data<&PgPool>,
+        Path(domain_name): Path<String>,
+    ) -> Result<Json<DomainModels>, poem::Error> {
+        // Pull domain
+        let domain = domain_models_read(pool, &domain_name).await?;
 
         Ok(Json(domain))
     }

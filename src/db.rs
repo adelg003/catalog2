@@ -1,14 +1,15 @@
-use crate::core::{DomainModel, DomainParam, ModelParam};
 use chrono::{DateTime, Utc};
 use poem::error::InternalServerError;
 use poem_openapi::Object;
+use regex::Regex;
 use sqlx::{query, query_as, FromRow, Postgres, QueryBuilder, Transaction};
+use validator::{Validate, ValidationError};
 
 /// Domain Shared
 #[derive(FromRow, Object)]
 pub struct Domain {
-    pub id: i32,
-    domain: String,
+    id: i32,
+    name: String,
     owner: String,
     extra: serde_json::Value,
     created_by: String,
@@ -22,26 +23,35 @@ impl Domain {
     pub async fn add_models(
         self,
         tx: &mut Transaction<'_, Postgres>,
-    ) -> Result<DomainModel, poem::Error> {
+    ) -> Result<DomainModels, poem::Error> {
         // Pull models
-        let models = model_select_many(tx, &self.domain)
+        let models = model_select_many(tx, &self.name)
             .await
             .map_err(InternalServerError)?;
 
-        Ok(DomainModel {
+        Ok(DomainModels {
             domain: self,
             models,
         })
     }
 }
 
+/// How to create a new domain
+#[derive(Object, Validate)]
+pub struct DomainParam {
+    name: String,
+    #[validate(email)]
+    owner: String,
+    extra: serde_json::Value,
+}
+
 /// Model to return via the API
 #[derive(FromRow, Object)]
 pub struct Model {
     id: i32,
-    model: String,
+    name: String,
     domain_id: i32,
-    domain: String,
+    domain_name: String,
     owner: String,
     extra: serde_json::Value,
     created_by: String,
@@ -50,15 +60,47 @@ pub struct Model {
     modified_date: DateTime<Utc>,
 }
 
+/// How to create a new model
+#[derive(Object, Validate)]
+pub struct ModelParam {
+    #[validate(custom(function = dbx_validater))]
+    name: String,
+    domain_name: String,
+    #[validate(email)]
+    owner: String,
+    extra: serde_json::Value,
+}
+
+/// Only allow for valid DBX name, meaning letters, number, dashes, and underscores. First
+/// character needs to be a letter. Also, since DBX is case-insensitive, only allow lower
+/// characters to ensure unique constraints work.
+fn dbx_validater(obj_name: &str) -> Result<(), ValidationError> {
+    let dbx_regex = Regex::new("^[a-z][a-z0-9_-]*$");
+    match dbx_regex {
+        Ok(re) if re.is_match(obj_name) => Ok(()),
+        _ => Err(ValidationError::new("Failed DBX Regex Check")),
+    }
+}
+
+/// Domain with models
+#[derive(Object)]
+pub struct DomainModels {
+    domain: Domain,
+    models: Vec<Model>,
+}
+
+//TODO ModelFields
+
 /// Add a domain to the domain table
 pub async fn domain_insert(
     tx: &mut Transaction<'_, Postgres>,
     domain_param: &DomainParam,
     username: &str,
-) -> Result<u64, sqlx::Error> {
-    let rows_affected = query!(
+) -> Result<Domain, sqlx::Error> {
+    let domain = query_as!(
+        Domain,
         "INSERT INTO domain (
-            domain,
+            name,
             owner,
             extra,
             created_by,
@@ -73,8 +115,16 @@ pub async fn domain_insert(
             $5,
             $6,
             $7
-        )",
-        domain_param.domain,
+        ) RETURNING
+            id,
+            name,
+            owner,
+            extra,
+            created_by,
+            created_date,
+            modified_by,
+            modified_date",
+        domain_param.name,
         domain_param.owner,
         domain_param.extra,
         username,
@@ -82,11 +132,10 @@ pub async fn domain_insert(
         username,
         Utc::now(),
     )
-    .execute(&mut **tx)
-    .await?
-    .rows_affected();
+    .fetch_one(&mut **tx)
+    .await?;
 
-    Ok(rows_affected)
+    Ok(domain)
 }
 
 /// Pull one domain
@@ -98,7 +147,7 @@ pub async fn domain_select(
         Domain,
         "SELECT
             id,
-            domain,
+            name,
             owner,
             extra,
             created_by,
@@ -108,7 +157,7 @@ pub async fn domain_select(
         FROM
             domain
         WHERE
-            domain = $1",
+            name = $1",
         domain_name,
     )
     .fetch_one(&mut **tx)
@@ -130,7 +179,7 @@ pub async fn domain_select_search(
     let mut query = QueryBuilder::<'_, Postgres>::new(
         "SELECT
             id,
-            domain,
+            name,
             owner,
             extra,
             created_by,
@@ -150,7 +199,7 @@ pub async fn domain_select_search(
 
         // Fuzzy search
         if let Some(domain_name) = domain_name {
-            separated.push(format!("domain LIKE '%{}%'", domain_name));
+            separated.push(format!("name LIKE '%{}%'", domain_name));
         }
         if let Some(owner) = owner {
             separated.push(format!("owner LIKE '%{}%'", owner));
@@ -188,61 +237,80 @@ pub async fn domain_update(
     domain_name: &str,
     domain_param: &DomainParam,
     username: &str,
-) -> Result<u64, sqlx::Error> {
-    let rows_affected = query!(
+) -> Result<Domain, sqlx::Error> {
+    let domain = query_as!(
+        Domain,
         "UPDATE
             domain
         SET 
-            domain = $1,
+            name = $1,
             owner = $2,
             extra = $3,
             modified_by = $4,
             modified_date = $5
         WHERE
-            domain = $6",
-        domain_param.domain,
+            name = $6
+        RETURNING
+            id,
+            name,
+            owner,
+            extra,
+            created_by,
+            created_date,
+            modified_by,
+            modified_date",
+        domain_param.name,
         domain_param.owner,
         domain_param.extra,
         username,
         Utc::now(),
         domain_name,
     )
-    .execute(&mut **tx)
-    .await?
-    .rows_affected();
+    .fetch_one(&mut **tx)
+    .await?;
 
-    Ok(rows_affected)
+    Ok(domain)
 }
 
 /// Delete a domain
 pub async fn domain_drop(
     tx: &mut Transaction<'_, Postgres>,
     domain_name: &str,
-) -> Result<u64, sqlx::Error> {
-    let rows_affected = query!(
+) -> Result<Domain, sqlx::Error> {
+    let domain = query_as!(
+        Domain,
         "DELETE FROM
             domain
         WHERE
-            domain = $1",
+            name = $1
+        RETURNING
+            id,
+            name,
+            owner,
+            extra,
+            created_by,
+            created_date,
+            modified_by,
+            modified_date",
         domain_name,
     )
-    .execute(&mut **tx)
-    .await?
-    .rows_affected();
+    .fetch_one(&mut **tx)
+    .await?;
 
-    Ok(rows_affected)
+    Ok(domain)
 }
 
 /// Add a model to the model table
 pub async fn model_insert(
     tx: &mut Transaction<'_, Postgres>,
     model_param: &ModelParam,
-    domain_id: &i32,
     username: &str,
-) -> Result<u64, sqlx::Error> {
-    let rows_affected = query!(
+) -> Result<Model, sqlx::Error> {
+    let domain = domain_select(tx, &model_param.domain_name).await?;
+
+    query!(
         "INSERT INTO model (
-            model,
+            name,
             domain_id,
             owner,
             extra,
@@ -260,8 +328,8 @@ pub async fn model_insert(
             $7,
             $8
         )",
-        model_param.model,
-        domain_id,
+        model_param.name,
+        domain.id,
         model_param.owner,
         model_param.extra,
         username,
@@ -270,10 +338,12 @@ pub async fn model_insert(
         Utc::now(),
     )
     .execute(&mut **tx)
-    .await?
-    .rows_affected();
+    .await?;
 
-    Ok(rows_affected)
+    // Pull the row
+    let model = model_select(tx, &model_param.name).await?;
+
+    Ok(model)
 }
 /// Pull one model
 pub async fn model_select(
@@ -284,9 +354,9 @@ pub async fn model_select(
         Model,
         "SELECT
             model.id,
-            model.model,
+            model.name,
             model.domain_id,
-            domain.domain,
+            domain.name AS \"domain_name\",
             model.owner,
             model.extra,
             model.created_by,
@@ -300,7 +370,7 @@ pub async fn model_select(
         on
             model.domain_id = domain.id 
         WHERE
-            model = $1",
+            model.name = $1",
         model_name,
     )
     .fetch_one(&mut **tx)
@@ -318,9 +388,9 @@ async fn model_select_many(
         Model,
         "SELECT
             model.id,
-            model.model,
+            model.name,
             model.domain_id,
-            domain.domain,
+            domain.name AS \"domain_name\",
             model.owner,
             model.extra,
             model.created_by,
@@ -334,7 +404,7 @@ async fn model_select_many(
         on
             model.domain_id = domain.id 
         WHERE
-            domain.domain = $1",
+            domain.name = $1",
         domain_name,
     )
     .fetch_all(&mut **tx)
@@ -357,9 +427,9 @@ pub async fn model_select_search(
     let mut query = QueryBuilder::<'_, Postgres>::new(
         "SELECT
             model.id,
-            model.model,
+            model.name,
             model.domain_id,
-            domain.domain,
+            domain.name AS \"domain_name\",
             model.owner,
             model.extra,
             model.created_by,
@@ -420,23 +490,24 @@ pub async fn model_update(
     tx: &mut Transaction<'_, Postgres>,
     model_name: &str,
     model_param: &ModelParam,
-    domain_id: &i32,
     username: &str,
-) -> Result<u64, sqlx::Error> {
+) -> Result<Model, sqlx::Error> {
+    let domain = domain_select(tx, &model_param.domain_name).await?;
+
     let rows_affected = query!(
         "UPDATE
             model
         SET 
-            model = $1,
+            name = $1,
             domain_id = $2,
             owner = $3,
             extra = $4,
             modified_by = $5,
             modified_date = $6
         WHERE
-            model = $7",
-        model_param.model,
-        domain_id,
+            name = $7",
+        model_param.name,
+        domain.id,
         model_param.owner,
         model_param.extra,
         username,
@@ -447,25 +518,37 @@ pub async fn model_update(
     .await?
     .rows_affected();
 
-    Ok(rows_affected)
+    // Check if any rows were updated.
+    if rows_affected == 0 {
+        return Err(sqlx::Error::RowNotFound);
+    }
+
+    // Pull the row, but with the domain name added
+    let model = model_select(tx, &model_param.name).await?;
+
+    Ok(model)
 }
 
 /// Delete a model
 pub async fn model_drop(
     tx: &mut Transaction<'_, Postgres>,
     model_name: &str,
-) -> Result<u64, sqlx::Error> {
-    let rows_affected = query!(
+) -> Result<Model, sqlx::Error> {
+    // Pull the row
+    let model = model_select(tx, model_name).await?;
+
+    // Now run the delete since we have the row in memory
+    query!(
         "DELETE FROM
             model
         WHERE
-            model = $1",
+            name = $1",
         model_name,
     )
     .execute(&mut **tx)
-    .await?
-    .rows_affected();
+    .await?;
 
-    Ok(rows_affected)
+    Ok(model)
 }
+
 //TODO Add Unit Test

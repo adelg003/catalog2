@@ -1,33 +1,17 @@
 use crate::db::{
     domain_drop, domain_insert, domain_select, domain_select_search, domain_update, model_drop,
-    model_insert, model_select, model_select_search, model_update, Domain, Model,
+    model_insert, model_select, model_select_search, model_update, Domain, DomainModels,
+    DomainParam, Model, ModelParam,
 };
 use poem::{
     error::{BadRequest, Conflict, InternalServerError, NotFound},
     http::StatusCode,
 };
 use poem_openapi::Object;
-use regex::Regex;
 use sqlx::PgPool;
-use validator::{Validate, ValidationError};
+use validator::Validate;
 
 const PAGE_SIZE: u64 = 50;
-
-/// Domain with models
-#[derive(Object)]
-pub struct DomainModel {
-    pub domain: Domain,
-    pub models: Vec<Model>,
-}
-
-/// How to create a new domain
-#[derive(Object, Validate)]
-pub struct DomainParam {
-    pub domain: String,
-    #[validate(email)]
-    pub owner: String,
-    pub extra: serde_json::Value,
-}
 
 /// Domain Search Results
 #[derive(Object)]
@@ -37,36 +21,12 @@ pub struct DomainSearch {
     more: bool,
 }
 
-//TODO ModelFields
-
-/// How to create a new model
-#[derive(Object, Validate)]
-pub struct ModelParam {
-    #[validate(custom(function = dbx_validater))]
-    pub model: String,
-    domain: String,
-    #[validate(email)]
-    pub owner: String,
-    pub extra: serde_json::Value,
-}
-
 /// Model Search Results
 #[derive(Object)]
 pub struct ModelSearch {
     models: Vec<Model>,
     page: u64,
     more: bool,
-}
-
-/// Only allow for valid DBX name, meaning letters, number, dashes, and underscores. First
-/// character needs to be a letter. Also, since DBX is case-insensitive, only allow lower
-/// characters to ensure unique constraints work.
-fn dbx_validater(obj_name: &str) -> Result<(), ValidationError> {
-    let dbx_regex = Regex::new("^[a-z][a-z0-9_-]*$");
-    match dbx_regex {
-        Ok(re) if re.is_match(obj_name) => Ok(()),
-        _ => Err(ValidationError::new("Failed DBX Regex Check")),
-    }
 }
 
 /// Add a domain
@@ -81,25 +41,10 @@ pub async fn domain_add(
     // Start Transaction
     let mut tx = pool.begin().await.map_err(InternalServerError)?;
 
-    // Check if domain already exists
-    match domain_select(&mut tx, &domain_param.domain).await {
-        Ok(_) => Err(poem::Error::from_string(
-            "Domain already exists",
-            StatusCode::CONFLICT,
-        )),
-        Err(sqlx::Error::RowNotFound) => Ok(()),
-        Err(err) => Err(InternalServerError(err)),
-    }?;
-
     // Add new domain
-    domain_insert(&mut tx, domain_param, username)
+    let domain = domain_insert(&mut tx, domain_param, username)
         .await
-        .map_err(InternalServerError)?;
-
-    // Pull domain
-    let domain = domain_select(&mut tx, &domain_param.domain)
-        .await
-        .map_err(InternalServerError)?;
+        .map_err(Conflict)?;
 
     // Commit Transaction
     tx.commit().await.map_err(InternalServerError)?;
@@ -108,7 +53,7 @@ pub async fn domain_add(
 }
 
 /// Read details of a domain
-pub async fn domain_read(pool: &PgPool, domain_name: &str) -> Result<DomainModel, poem::Error> {
+pub async fn domain_read(pool: &PgPool, domain_name: &str) -> Result<Domain, poem::Error> {
     // Start Transaction
     let mut tx = pool.begin().await.map_err(InternalServerError)?;
 
@@ -117,8 +62,23 @@ pub async fn domain_read(pool: &PgPool, domain_name: &str) -> Result<DomainModel
         .await
         .map_err(NotFound)?;
 
-    // Add Models
-    let domain_models = domain.add_models(&mut tx).await?;
+    Ok(domain)
+}
+
+/// Read details of a domain and add model details for that domain
+pub async fn domain_models_read(
+    pool: &PgPool,
+    domain_name: &str,
+) -> Result<DomainModels, poem::Error> {
+    // Start Transaction
+    let mut tx = pool.begin().await.map_err(InternalServerError)?;
+
+    // Pull domain_models
+    let domain_models = domain_select(&mut tx, domain_name)
+        .await
+        .map_err(NotFound)?
+        .add_models(&mut tx)
+        .await?;
 
     Ok(domain_models)
 }
@@ -184,20 +144,19 @@ pub async fn domain_edit(
     // Start Transaction
     let mut tx = pool.begin().await.map_err(InternalServerError)?;
 
-    // Check to make sure domain already exists
-    domain_select(&mut tx, domain_name)
-        .await
-        .map_err(NotFound)?;
-
     // Update domain
-    domain_update(&mut tx, domain_name, domain_param, username)
-        .await
-        .map_err(Conflict)?;
+    let update = domain_update(&mut tx, domain_name, domain_param, username).await;
 
-    // Pull domain
-    let domain = domain_select(&mut tx, &domain_param.domain)
-        .await
-        .map_err(InternalServerError)?;
+    // What result did we get?
+    let domain = match update {
+        Ok(domain) => Ok(domain),
+        Err(sqlx::Error::RowNotFound) => Err(poem::Error::from_string(
+            "domain does not exist",
+            StatusCode::NOT_FOUND,
+        )),
+        Err(sqlx::Error::Database(err)) => Err(Conflict(err)),
+        Err(err) => Err(InternalServerError(err)),
+    }?;
 
     // Commit Transaction
     tx.commit().await.map_err(InternalServerError)?;
@@ -206,14 +165,15 @@ pub async fn domain_edit(
 }
 
 /// Remove a Domain
-pub async fn domain_remove(pool: &PgPool, domain_name: &str) -> Result<Domain, poem::Error> {
+pub async fn domain_remove(
+    pool: &PgPool,
+    domain_name: &str,
+    //cascade: &bool,
+) -> Result<Domain, poem::Error> {
     // Start Transaction
     let mut tx = pool.begin().await.map_err(InternalServerError)?;
 
-    // Check to make sure domain already exists
-    let domain = domain_select(&mut tx, domain_name)
-        .await
-        .map_err(NotFound)?;
+    // Delete related models if cascade is on
 
     //TODO add cascade
 
@@ -221,9 +181,18 @@ pub async fn domain_remove(pool: &PgPool, domain_name: &str) -> Result<Domain, p
     //TODO Raise Conflict
 
     // Delete the domain
-    domain_drop(&mut tx, domain_name)
-        .await
-        .map_err(InternalServerError)?;
+    let delete = domain_drop(&mut tx, domain_name).await;
+
+    // What result did we get?
+    let domain = match delete {
+        Ok(domain) => Ok(domain),
+        Err(sqlx::Error::RowNotFound) => Err(poem::Error::from_string(
+            "domain does not exist",
+            StatusCode::NOT_FOUND,
+        )),
+        Err(sqlx::Error::Database(err)) => Err(Conflict(err)),
+        Err(err) => Err(InternalServerError(err)),
+    }?;
 
     // Commit Transaction
     tx.commit().await.map_err(InternalServerError)?;
@@ -243,30 +212,19 @@ pub async fn model_add(
     // Start Transaction
     let mut tx = pool.begin().await.map_err(InternalServerError)?;
 
-    // Check if model already exists
-    match model_select(&mut tx, &model_param.model).await {
-        Ok(_) => Err(poem::Error::from_string(
-            "Model already exists",
-            StatusCode::CONFLICT,
+    // Add Model
+    let insert = model_insert(&mut tx, model_param, username).await;
+
+    // What result did we get?
+    let model = match insert {
+        Ok(model) => Ok(model),
+        Err(sqlx::Error::RowNotFound) => Err(poem::Error::from_string(
+            "domain does not exist",
+            StatusCode::NOT_FOUND,
         )),
-        Err(sqlx::Error::RowNotFound) => Ok(()),
+        Err(sqlx::Error::Database(err)) => Err(Conflict(err)),
         Err(err) => Err(InternalServerError(err)),
     }?;
-
-    // Pull the parent domain
-    let domain = domain_select(&mut tx, &model_param.domain)
-        .await
-        .map_err(NotFound)?;
-
-    // Add new model
-    model_insert(&mut tx, model_param, &domain.id, username)
-        .await
-        .map_err(InternalServerError)?;
-
-    // Pull model
-    let model: Model = model_select(&mut tx, &model_param.model)
-        .await
-        .map_err(InternalServerError)?;
 
     // Commit Transaction
     tx.commit().await.map_err(InternalServerError)?;
@@ -353,23 +311,19 @@ pub async fn model_edit(
     // Start Transaction
     let mut tx = pool.begin().await.map_err(InternalServerError)?;
 
-    // Check to make sure model already exists
-    model_select(&mut tx, model_name).await.map_err(NotFound)?;
+    // Update domain
+    let update = model_update(&mut tx, model_name, model_param, username).await;
 
-    // Pull the related Domain details
-    let domain = domain_select(&mut tx, &model_param.domain)
-        .await
-        .map_err(NotFound)?;
-
-    // Update model
-    model_update(&mut tx, model_name, model_param, &domain.id, username)
-        .await
-        .map_err(Conflict)?;
-
-    // Pull the new Model
-    let model: Model = model_select(&mut tx, &model_param.model)
-        .await
-        .map_err(InternalServerError)?;
+    // What result did we get?
+    let model = match update {
+        Ok(model) => Ok(model),
+        Err(sqlx::Error::RowNotFound) => Err(poem::Error::from_string(
+            "domain or model does not exist",
+            StatusCode::NOT_FOUND,
+        )),
+        Err(sqlx::Error::Database(err)) => Err(Conflict(err)),
+        Err(err) => Err(InternalServerError(err)),
+    }?;
 
     // Commit Transaction
     tx.commit().await.map_err(InternalServerError)?;
@@ -382,18 +336,13 @@ pub async fn model_remove(pool: &PgPool, model_name: &str) -> Result<Model, poem
     // Start Transaction
     let mut tx = pool.begin().await.map_err(InternalServerError)?;
 
-    // Check to make sure model already exists
-    let model: Model = model_select(&mut tx, model_name).await.map_err(NotFound)?;
-
     //TODO add cascade
 
     //TODO - Make sure no fields exists for this model
     //TODO Raise Conflict
 
     // Delete the model
-    model_drop(&mut tx, model_name)
-        .await
-        .map_err(InternalServerError)?;
+    let model = model_drop(&mut tx, model_name).await.map_err(NotFound)?;
 
     // Commit Transaction
     tx.commit().await.map_err(InternalServerError)?;
