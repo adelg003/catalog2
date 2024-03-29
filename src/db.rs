@@ -1,95 +1,6 @@
-use chrono::{DateTime, Utc};
-use poem::error::InternalServerError;
-use poem_openapi::Object;
-use regex::Regex;
-use sqlx::{query, query_as, FromRow, Postgres, QueryBuilder, Transaction};
-use validator::{Validate, ValidationError};
-
-/// Domain Shared
-#[derive(FromRow, Object)]
-pub struct Domain {
-    id: i32,
-    name: String,
-    owner: String,
-    extra: serde_json::Value,
-    created_by: String,
-    created_date: DateTime<Utc>,
-    modified_by: String,
-    modified_date: DateTime<Utc>,
-}
-
-impl Domain {
-    /// Add model details to a domain
-    pub async fn add_models(
-        self,
-        tx: &mut Transaction<'_, Postgres>,
-    ) -> Result<DomainModels, poem::Error> {
-        // Pull models
-        let models = model_select_many(tx, &self.name)
-            .await
-            .map_err(InternalServerError)?;
-
-        Ok(DomainModels {
-            domain: self,
-            models,
-        })
-    }
-}
-
-/// How to create a new domain
-#[derive(Object, Validate)]
-pub struct DomainParam {
-    name: String,
-    #[validate(email)]
-    owner: String,
-    extra: serde_json::Value,
-}
-
-/// Model to return via the API
-#[derive(FromRow, Object)]
-pub struct Model {
-    id: i32,
-    name: String,
-    domain_id: i32,
-    domain_name: String,
-    owner: String,
-    extra: serde_json::Value,
-    created_by: String,
-    created_date: DateTime<Utc>,
-    modified_by: String,
-    modified_date: DateTime<Utc>,
-}
-
-/// How to create a new model
-#[derive(Object, Validate)]
-pub struct ModelParam {
-    #[validate(custom(function = dbx_validater))]
-    name: String,
-    domain_name: String,
-    #[validate(email)]
-    owner: String,
-    extra: serde_json::Value,
-}
-
-/// Only allow for valid DBX name, meaning letters, number, dashes, and underscores. First
-/// character needs to be a letter. Also, since DBX is case-insensitive, only allow lower
-/// characters to ensure unique constraints work.
-fn dbx_validater(obj_name: &str) -> Result<(), ValidationError> {
-    let dbx_regex = Regex::new("^[a-z][a-z0-9_-]*$");
-    match dbx_regex {
-        Ok(re) if re.is_match(obj_name) => Ok(()),
-        _ => Err(ValidationError::new("Failed DBX Regex Check")),
-    }
-}
-
-/// Domain with models
-#[derive(Object)]
-pub struct DomainModels {
-    domain: Domain,
-    models: Vec<Model>,
-}
-
-//TODO ModelFields
+use crate::core::{DbxDataType, Domain, DomainParam, Field, FieldParam, Model, ModelParam};
+use chrono::Utc;
+use sqlx::{query, query_as, Postgres, QueryBuilder, Transaction};
 
 /// Add a domain to the domain table
 pub async fn domain_insert(
@@ -345,6 +256,7 @@ pub async fn model_insert(
 
     Ok(model)
 }
+
 /// Pull one model
 pub async fn model_select(
     tx: &mut Transaction<'_, Postgres>,
@@ -380,7 +292,7 @@ pub async fn model_select(
 }
 
 /// Pull many models by domain
-async fn model_select_many(
+pub async fn model_select_by_domain(
     tx: &mut Transaction<'_, Postgres>,
     domain_name: &str,
 ) -> Result<Vec<Model>, sqlx::Error> {
@@ -550,5 +462,171 @@ pub async fn model_drop(
 
     Ok(model)
 }
+
+/// Add a field to the field table
+pub async fn field_insert(
+    tx: &mut Transaction<'_, Postgres>,
+    field_param: &FieldParam,
+    username: &str,
+) -> Result<Field, sqlx::Error> {
+    let model = model_select(tx, &field_param.model_name).await?;
+
+    query!(
+        "INSERT INTO field (
+            name,
+            model_id,
+            is_primary,
+            data_type,
+            is_nullable,
+            precision,
+            scale,
+            extra,
+            created_by,
+            created_date,
+            modified_by,
+            modified_date
+        ) VALUES (
+            $1,
+            $2,
+            $3,
+            $4,
+            $5,
+            $6,
+            $7,
+            $8,
+            $9,
+            $10,
+            $11,
+            $12
+        )",
+        field_param.name,
+        model.id,
+        field_param.is_primary,
+        field_param.data_type as DbxDataType,
+        field_param.is_nullable,
+        field_param.precision,
+        field_param.scale,
+        field_param.extra,
+        username,
+        Utc::now(),
+        username,
+        Utc::now(),
+    )
+    .execute(&mut **tx)
+    .await?;
+
+    // Pull the row
+    let field = field_select(tx, &model.name, &field_param.name).await?;
+
+    Ok(field)
+}
+
+/// Pull one field
+pub async fn field_select(
+    tx: &mut Transaction<'_, Postgres>,
+    model_name: &str,
+    field_name: &str,
+) -> Result<Field, sqlx::Error> {
+    let field = query_as!(
+        Field,
+        "SELECT
+            id,
+            name,
+            model_id,
+            model_name,
+            seq,
+            is_primary,
+            data_type AS \"data_type!: DbxDataType\",
+            is_nullable,
+            precision,
+            scale,
+            extra,
+            created_by,
+            created_date,
+            modified_by,
+            modified_date
+        FROM (
+            SELECT
+                field.id,
+                field.name,
+                field.model_id,
+                model.name AS \"model_name\",
+                ROW_NUMBER() OVER (ORDER BY field.id) as \"seq\",
+                field.is_primary,
+                field.data_type,
+                field.is_nullable,
+                field.precision,
+                field.scale,
+                field.extra,
+                field.created_by,
+                field.created_date,
+                field.modified_by,
+                field.modified_date
+            FROM
+                field
+            LEFT JOIN
+                model
+            ON
+                field.model_id = model.id 
+            WHERE
+                model.name = $1
+        ) wip
+        WHERE
+            name = $2",
+        model_name,
+        field_name,
+    )
+    .fetch_one(&mut **tx)
+    .await?;
+
+    Ok(field)
+}
+
+/// Pull many fields by model
+pub async fn field_select_by_model(
+    tx: &mut Transaction<'_, Postgres>,
+    model_name: &str,
+) -> Result<Vec<Field>, sqlx::Error> {
+    let model = query_as!(
+        Field,
+        "SELECT
+            field.id,
+            field.name,
+            field.model_id,
+            model.name AS \"model_name\",
+            ROW_NUMBER() OVER (ORDER BY field.id) as \"seq\",
+            field.is_primary,
+            field.data_type AS \"data_type!: DbxDataType\",
+            field.is_nullable,
+            field.precision,
+            field.scale,
+            field.extra,
+            field.created_by,
+            field.created_date,
+            field.modified_by,
+            field.modified_date
+        FROM
+            field
+        LEFT JOIN
+            model
+        on
+            field.model_id = model.id 
+        WHERE
+            model.name = $1
+        ORDER BY
+            field.id",
+        model_name,
+    )
+    .fetch_all(&mut **tx)
+    .await?;
+
+    Ok(model)
+}
+
+//TODO Field Serach
+
+//TODO Field Update
+
+//TODO Field Delete
 
 //TODO Add Unit Test

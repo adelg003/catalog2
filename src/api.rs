@@ -1,11 +1,8 @@
 use crate::{
     auth::{make_jwt, Auth, TokenAuth, TokenOrBasicAuth},
     core::{
-        domain_add, domain_edit, domain_models_read, domain_read, domain_read_search,
-        domain_remove, model_add, model_edit, model_read, model_read_search, model_remove,
-        DomainSearch, ModelSearch,
+        domain_add, domain_edit, domain_read, domain_read_search, domain_read_with_models, domain_remove, field_add, field_read, model_add, model_add_with_fields, model_edit, model_read, model_read_search, model_read_with_fields, model_remove, Domain, DomainModels, DomainParam, DomainSearch, Field, FieldParam, Model, ModelFields, ModelFieldsParam, ModelParam, ModelSearch
     },
-    db::{Domain, DomainModels, DomainParam, Model, ModelParam},
 };
 use jsonwebtoken::EncodingKey;
 use poem::{error::InternalServerError, web::Data};
@@ -21,6 +18,7 @@ enum Tag {
     Auth,
     //TODO Component,
     Domain,
+    Field,
     Model,
 }
 
@@ -77,13 +75,13 @@ impl Api {
 
     /// Get a single domain and its models
     #[oai(path = "/domain_with_models/:domain_name", method = "get", tag = Tag::Domain)]
-    async fn domain_models_get(
+    async fn domain_get_with_models(
         &self,
         Data(pool): Data<&PgPool>,
         Path(domain_name): Path<String>,
     ) -> Result<Json<DomainModels>, poem::Error> {
         // Pull domain
-        let domain = domain_models_read(pool, &domain_name).await?;
+        let domain = domain_read_with_models(pool, &domain_name).await?;
 
         Ok(Json(domain))
     }
@@ -129,6 +127,7 @@ impl Api {
     #[oai(path = "/domain/:domain_name", method = "delete", tag = Tag::Domain)]
     async fn domain_delete(
         &self,
+        _auth: TokenAuth,
         Data(pool): Data<&PgPool>,
         Path(domain_name): Path<String>,
     ) -> Result<Json<Domain>, poem::Error> {
@@ -149,10 +148,27 @@ impl Api {
         // Get user from authentication.
         let username = auth.username();
 
-        // Run Domain add logic
+        // Add a model
         let model = model_add(pool, &model_param, username).await?;
 
         Ok(Json(model))
+    }
+
+    /// Add a model to the model table
+    #[oai(path = "/model_with_fields", method = "post", tag = Tag::Model)]
+    async fn model_post_with_fields(
+        &self,
+        auth: TokenAuth,
+        Data(pool): Data<&PgPool>,
+        Json(param): Json<ModelFieldsParam>,
+    ) -> Result<Json<ModelFields>, poem::Error> {
+        // Get user from authentication.
+        let username = auth.username();
+
+        // Add a model and its field
+        let model_fields = model_add_with_fields(pool, &param, username).await?;
+
+        Ok(Json(model_fields))
     }
 
     /// Get a single model
@@ -166,6 +182,19 @@ impl Api {
         let model = model_read(pool, &model_name).await?;
 
         Ok(Json(model))
+    }
+
+    /// Get a single model and its fields
+    #[oai(path = "/model_with_fields/:model_name", method = "get", tag = Tag::Model)]
+    async fn model_get_with_fields(
+        &self,
+        Data(pool): Data<&PgPool>,
+        Path(model_name): Path<String>,
+    ) -> Result<Json<ModelFields>, poem::Error> {
+        // Pull domain
+        let model_fields = model_read_with_fields(pool, &model_name).await?;
+
+        Ok(Json(model_fields))
     }
 
     /// Search models
@@ -211,6 +240,7 @@ impl Api {
     #[oai(path = "/model/:model_name", method = "delete", tag = Tag::Model)]
     async fn model_delete(
         &self,
+        _auth: TokenAuth,
         Data(pool): Data<&PgPool>,
         Path(model_name): Path<String>,
     ) -> Result<Json<Model>, poem::Error> {
@@ -218,6 +248,37 @@ impl Api {
         let model = model_remove(pool, &model_name).await?;
 
         Ok(Json(model))
+    }
+
+    /// Add a field to the field table
+    #[oai(path = "/field", method = "post", tag = Tag::Field)]
+    async fn field_post(
+        &self,
+        auth: TokenAuth,
+        Data(pool): Data<&PgPool>,
+        Json(field_param): Json<FieldParam>,
+    ) -> Result<Json<Field>, poem::Error> {
+        // Get user from authentication.
+        let username = auth.username();
+
+        // Run Domain add logic
+        let field = field_add(pool, &field_param, username).await?;
+
+        Ok(Json(field))
+    }
+
+    /// Get a single field
+    #[oai(path = "/field/:model_name/:field_name", method = "get", tag = Tag::Field)]
+    async fn field_get(
+        &self,
+        Data(pool): Data<&PgPool>,
+        Path(model_name): Path<String>,
+        Path(field_name): Path<String>,
+    ) -> Result<Json<Field>, poem::Error> {
+        // Pull field
+        let field = field_read(pool, &model_name, &field_name).await?;
+
+        Ok(Json(field))
     }
 }
 
