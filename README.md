@@ -1,5 +1,9 @@
 # Catalog2
 
+### UI Still in development
+
+REST API / Swagger is ready though
+
 ## Overview
 
 Do you:
@@ -54,6 +58,7 @@ sqlx migrate run
 ```
 
 If you don't have the `sqlx` cli tool, it can be installed via the following command:
+
 ```bash
 cargo install sqlx-cli --locked
 ```

@@ -587,7 +587,7 @@ pub async fn field_select_by_model(
     tx: &mut Transaction<'_, Postgres>,
     model_name: &str,
 ) -> Result<Vec<Field>, sqlx::Error> {
-    let model = query_as!(
+    let fields = query_as!(
         Field,
         "SELECT
             field.id,
@@ -620,13 +620,112 @@ pub async fn field_select_by_model(
     .fetch_all(&mut **tx)
     .await?;
 
-    Ok(model)
+    Ok(fields)
 }
 
-//TODO Field Serach
+/// Update a field
+pub async fn field_update(
+    tx: &mut Transaction<'_, Postgres>,
+    model_name: &str,
+    field_name: &str,
+    field_param: &FieldParam,
+    username: &str,
+) -> Result<Field, sqlx::Error> {
+    let source_model = model_select(tx, model_name).await?;
+    let dest_model = model_select(tx, &field_param.model_name).await?;
 
-//TODO Field Update
+    let rows_affected = query!(
+        "UPDATE
+            field
+        SET 
+            name = $1,
+            model_id = $2,
+            is_primary = $3,
+            data_type = $4,
+            is_nullable = $5,
+            precision = $6,
+            scale = $7,
+            extra = $8,
+            modified_by = $9,
+            modified_date = $10
+        WHERE
+            model_id = $11
+            AND name = $12",
+        field_param.name,
+        dest_model.id,
+        field_param.is_primary,
+        field_param.data_type as DbxDataType,
+        field_param.is_nullable,
+        field_param.precision,
+        field_param.scale,
+        field_param.extra,
+        username,
+        Utc::now(),
+        source_model.id,
+        field_name,
+    )
+    .execute(&mut **tx)
+    .await?
+    .rows_affected();
 
-//TODO Field Delete
+    // Check if any rows were updated.
+    if rows_affected == 0 {
+        return Err(sqlx::Error::RowNotFound);
+    }
+
+    // Pull the row, but with the domain name added
+    let field = field_select(tx, &field_param.model_name, &field_param.name).await?;
+
+    Ok(field)
+}
+
+/// Delete a field
+pub async fn field_drop(
+    tx: &mut Transaction<'_, Postgres>,
+    model_name: &str,
+    field_name: &str,
+) -> Result<Field, sqlx::Error> {
+    // Pull the row and parent
+    let model = model_select(tx, model_name).await?;
+    let field = field_select(tx, model_name, field_name).await?;
+
+    // Now run the delete since we have the row in memory
+    query!(
+        "DELETE FROM
+            field
+        WHERE
+            model_id = $1
+            AND name = $2",
+        model.id,
+        field_name,
+    )
+    .execute(&mut **tx)
+    .await?;
+
+    Ok(field)
+}
+
+/// Delete all field for a model
+pub async fn field_drop_by_model(
+    tx: &mut Transaction<'_, Postgres>,
+    model_name: &str,
+) -> Result<Vec<Field>, sqlx::Error> {
+    // Pull the rows and parent
+    let model = model_select(tx, model_name).await?;
+    let fields = field_select_by_model(tx, model_name).await?;
+
+    // Now run the delete since we have the rows in memory
+    query!(
+        "DELETE FROM
+            field
+        WHERE
+            model_id = $1",
+        model.id,
+    )
+    .execute(&mut **tx)
+    .await?;
+
+    Ok(fields)
+}
 
 //TODO Add Unit Test

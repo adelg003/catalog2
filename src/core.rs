@@ -1,7 +1,8 @@
 use crate::db::{
-    domain_drop, domain_insert, domain_select, domain_select_search, domain_update, field_insert,
-    field_select, field_select_by_model, model_drop, model_insert, model_select,
-    model_select_by_domain, model_select_search, model_update,
+    domain_drop, domain_insert, domain_select, domain_select_search, domain_update, field_drop,
+    field_drop_by_model, field_insert, field_select, field_select_by_model, field_update,
+    model_drop, model_insert, model_select, model_select_by_domain, model_select_search,
+    model_update,
 };
 use chrono::{DateTime, Utc};
 use poem::{
@@ -456,74 +457,6 @@ pub async fn model_add(
     Ok(model)
 }
 
-/// Add a model with fields
-pub async fn model_add_with_fields(
-    pool: &PgPool,
-    param: &ModelFieldsParam,
-    username: &str,
-) -> Result<ModelFields, poem::Error> {
-    // Make sure the payload we got is good (check with Validate package).
-    param.model.validate().map_err(BadRequest)?;
-
-    // Start Transaction
-    let mut tx = pool.begin().await.map_err(InternalServerError)?;
-
-    // Add Model
-    let model_insert = model_insert(&mut tx, &param.model, username).await;
-
-    // What result did we get?
-    let model = match model_insert {
-        Ok(model) => Ok(model),
-        Err(sqlx::Error::RowNotFound) => Err(poem::Error::from_string(
-            "domain does not exist",
-            StatusCode::NOT_FOUND,
-        )),
-        Err(sqlx::Error::Database(err)) => Err(Conflict(err)),
-        Err(err) => Err(InternalServerError(err)),
-    }?;
-
-    // Add Fields
-    let mut fields = Vec::new();
-    for wip in &param.fields {
-        // Map to the full FieldParam
-        let field_param = FieldParam {
-            name: wip.name.clone(),
-            model_name: model.name.clone(),
-            is_primary: wip.is_primary,
-            data_type: wip.data_type,
-            is_nullable: wip.is_nullable,
-            precision: wip.precision,
-            scale: wip.scale,
-            extra: wip.extra.clone(),
-        };
-
-        // Make sure the payload we got is good (check with Validate package).
-        field_param.validate().map_err(BadRequest)?;
-
-        // Insert the field
-        let field_insert = field_insert(&mut tx, &field_param, username).await;
-
-        // What result did we get?
-        let field = match field_insert {
-            Ok(field) => Ok(field),
-            // If this happens after just inserting a model, then its an us issue.
-            Err(sqlx::Error::RowNotFound) => Err(poem::Error::from_string(
-                "model does not exist",
-                StatusCode::INTERNAL_SERVER_ERROR,
-            )),
-            Err(sqlx::Error::Database(err)) => Err(Conflict(err)),
-            Err(err) => Err(InternalServerError(err)),
-        }?;
-
-        fields.push(field);
-    }
-
-    // Commit Transaction
-    tx.commit().await.map_err(InternalServerError)?;
-
-    Ok(ModelFields { model, fields })
-}
-
 /// Read details of a model
 pub async fn model_read(pool: &PgPool, model_name: &str) -> Result<Model, poem::Error> {
     // Start Transaction
@@ -533,24 +466,6 @@ pub async fn model_read(pool: &PgPool, model_name: &str) -> Result<Model, poem::
     let model: Model = model_select(&mut tx, model_name).await.map_err(NotFound)?;
 
     Ok(model)
-}
-
-/// Read details of a model and add fields details for that model
-pub async fn model_read_with_fields(
-    pool: &PgPool,
-    model_name: &str,
-) -> Result<ModelFields, poem::Error> {
-    // Start Transaction
-    let mut tx = pool.begin().await.map_err(InternalServerError)?;
-
-    // Pull domain_models
-    let model_fields = model_select(&mut tx, model_name)
-        .await
-        .map_err(NotFound)?
-        .add_fields(&mut tx)
-        .await?;
-
-    Ok(model_fields)
 }
 
 /// Read details of many models
@@ -650,7 +565,110 @@ pub async fn model_remove(pool: &PgPool, model_name: &str) -> Result<Model, poem
     Ok(model)
 }
 
-//TODO Remove Model and cascade to fields
+/// Add a model with fields
+pub async fn model_add_with_fields(
+    pool: &PgPool,
+    param: &ModelFieldsParam,
+    username: &str,
+) -> Result<ModelFields, poem::Error> {
+    // Make sure the payload we got is good (check with Validate package).
+    param.model.validate().map_err(BadRequest)?;
+
+    // Start Transaction
+    let mut tx = pool.begin().await.map_err(InternalServerError)?;
+
+    // Add Model
+    let model_insert = model_insert(&mut tx, &param.model, username).await;
+
+    // What result did we get?
+    let model = match model_insert {
+        Ok(model) => Ok(model),
+        Err(sqlx::Error::RowNotFound) => Err(poem::Error::from_string(
+            "domain does not exist",
+            StatusCode::NOT_FOUND,
+        )),
+        Err(sqlx::Error::Database(err)) => Err(Conflict(err)),
+        Err(err) => Err(InternalServerError(err)),
+    }?;
+
+    // Add Fields
+    let mut fields = Vec::new();
+    for wip in &param.fields {
+        // Map to the full FieldParam
+        let field_param = FieldParam {
+            name: wip.name.clone(),
+            model_name: model.name.clone(),
+            is_primary: wip.is_primary,
+            data_type: wip.data_type,
+            is_nullable: wip.is_nullable,
+            precision: wip.precision,
+            scale: wip.scale,
+            extra: wip.extra.clone(),
+        };
+
+        // Make sure the payload we got is good (check with Validate package).
+        field_param.validate().map_err(BadRequest)?;
+
+        // Insert the field
+        let field_insert = field_insert(&mut tx, &field_param, username).await;
+
+        // What result did we get?
+        let field = match field_insert {
+            Ok(field) => Ok(field),
+            // If this happens after just inserting a model, then its an us issue.
+            Err(sqlx::Error::RowNotFound) => Err(poem::Error::from_string(
+                "model does not exist",
+                StatusCode::INTERNAL_SERVER_ERROR,
+            )),
+            Err(sqlx::Error::Database(err)) => Err(Conflict(err)),
+            Err(err) => Err(InternalServerError(err)),
+        }?;
+
+        fields.push(field);
+    }
+
+    Ok(ModelFields { model, fields })
+}
+
+/// Read details of a model and add fields details for that model
+pub async fn model_read_with_fields(
+    pool: &PgPool,
+    model_name: &str,
+) -> Result<ModelFields, poem::Error> {
+    // Start Transaction
+    let mut tx = pool.begin().await.map_err(InternalServerError)?;
+
+    // Pull domain_models
+    let model_fields = model_select(&mut tx, model_name)
+        .await
+        .map_err(NotFound)?
+        .add_fields(&mut tx)
+        .await?;
+
+    Ok(model_fields)
+}
+
+/// Delete a model with all its fields
+pub async fn model_remove_with_fields(
+    pool: &PgPool,
+    model_name: &str,
+) -> Result<ModelFields, poem::Error> {
+    // Start Transaction
+    let mut tx = pool.begin().await.map_err(InternalServerError)?;
+
+    // Delete all the fields
+    let fields = field_drop_by_model(&mut tx, model_name)
+        .await
+        .map_err(NotFound)?;
+
+    // Delete the model
+    let model = model_drop(&mut tx, model_name).await.map_err(NotFound)?;
+
+    // Commit Transaction
+    tx.commit().await.map_err(InternalServerError)?;
+
+    Ok(ModelFields { model, fields })
+}
 
 /// Add a field
 pub async fn field_add(
@@ -701,10 +719,58 @@ pub async fn field_read(
     Ok(field)
 }
 
-//TODO Field Serach
+/// Edit a Field
+pub async fn field_edit(
+    pool: &PgPool,
+    model_name: &str,
+    field_name: &str,
+    field_param: &FieldParam,
+    username: &str,
+) -> Result<Field, poem::Error> {
+    // Make sure the payload we got is good (check with Validate package).
+    field_param.validate().map_err(BadRequest)?;
 
-//TODO Field Update
+    // Start Transaction
+    let mut tx = pool.begin().await.map_err(InternalServerError)?;
 
-//TODO Field Delete
+    // Update domain
+    let update = field_update(&mut tx, model_name, field_name, field_param, username).await;
+
+    // What result did we get?
+    let field = match update {
+        Ok(field) => Ok(field),
+        Err(sqlx::Error::RowNotFound) => Err(poem::Error::from_string(
+            "model or field does not exist",
+            StatusCode::NOT_FOUND,
+        )),
+        Err(sqlx::Error::Database(err)) => Err(Conflict(err)),
+        Err(err) => Err(InternalServerError(err)),
+    }?;
+
+    // Commit Transaction
+    tx.commit().await.map_err(InternalServerError)?;
+
+    Ok(field)
+}
+
+/// Remove a Field
+pub async fn field_remove(
+    pool: &PgPool,
+    model_name: &str,
+    field_name: &str,
+) -> Result<Field, poem::Error> {
+    // Start Transaction
+    let mut tx = pool.begin().await.map_err(InternalServerError)?;
+
+    // Delete the field
+    let field = field_drop(&mut tx, model_name, field_name)
+        .await
+        .map_err(NotFound)?;
+
+    // Commit Transaction
+    tx.commit().await.map_err(InternalServerError)?;
+
+    Ok(field)
+}
 
 //TODO Add Unit Tes
