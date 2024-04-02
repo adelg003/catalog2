@@ -7,7 +7,6 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-askama = "0.12.1"
 bcrypt = "0.15.1"
 chrono = "0.4.35"
 color-eyre = "0.6.3"

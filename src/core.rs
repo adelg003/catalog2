@@ -11,13 +11,13 @@ use poem::{
 };
 use poem_openapi::{Enum, Object};
 use regex::Regex;
-use sqlx::{FromRow, PgPool, Postgres, Transaction, Type};
+use sqlx::{FromRow, Postgres, Transaction, Type};
 use validator::{Validate, ValidationError};
 
 const PAGE_SIZE: u64 = 50;
 
 /// Domain Shared
-#[derive(FromRow, Object)]
+#[derive(Debug, FromRow, Object)]
 pub struct Domain {
     pub id: i32,
     pub name: String,
@@ -48,7 +48,7 @@ impl Domain {
 }
 
 /// How to create a new domain
-#[derive(Object, Validate)]
+#[derive(Debug, Object, Validate)]
 pub struct DomainParam {
     pub name: String,
     #[validate(email)]
@@ -263,53 +263,42 @@ fn dbx_validater(obj_name: &str) -> Result<(), ValidationError> {
 
 /// Add a domain
 pub async fn domain_add(
-    pool: &PgPool,
+    tx: &mut Transaction<'_, Postgres>,
     domain_param: &DomainParam,
     username: &str,
 ) -> Result<Domain, poem::Error> {
     // Make sure the payload we got is good (check with Validate package).
     domain_param.validate().map_err(BadRequest)?;
 
-    // Start Transaction
-    let mut tx = pool.begin().await.map_err(InternalServerError)?;
-
     // Add new domain
-    let domain = domain_insert(&mut tx, domain_param, username)
+    let domain = domain_insert(tx, domain_param, username)
         .await
         .map_err(Conflict)?;
-
-    // Commit Transaction
-    tx.commit().await.map_err(InternalServerError)?;
 
     Ok(domain)
 }
 
 /// Read details of a domain
-pub async fn domain_read(pool: &PgPool, domain_name: &str) -> Result<Domain, poem::Error> {
-    // Start Transaction
-    let mut tx = pool.begin().await.map_err(InternalServerError)?;
-
+pub async fn domain_read(
+    tx: &mut Transaction<'_, Postgres>,
+    domain_name: &str,
+) -> Result<Domain, poem::Error> {
     // Pull domain
-    let domain = domain_select(&mut tx, domain_name)
-        .await
-        .map_err(NotFound)?;
+    let domain = domain_select(tx, domain_name).await.map_err(NotFound)?;
 
     Ok(domain)
 }
 
 /// Read details of a domain and add model details for that domain
 pub async fn domain_read_with_models(
-    pool: &PgPool,
+    tx: &mut Transaction<'_, Postgres>,
     domain_name: &str,
 ) -> Result<DomainModels, poem::Error> {
-    // Start Transaction
-    let mut tx = pool.begin().await.map_err(InternalServerError)?;
-
     // Pull domain_models
-    let domain_models = domain_select(&mut tx, domain_name)
+    let domain_models = domain_select(tx, domain_name)
         .await
         .map_err(NotFound)?
-        .add_models(&mut tx)
+        .add_models(tx)
         .await?;
 
     Ok(domain_models)
@@ -317,7 +306,7 @@ pub async fn domain_read_with_models(
 
 /// Read details of many domains
 pub async fn domain_read_search(
-    pool: &PgPool,
+    tx: &mut Transaction<'_, Postgres>,
     domain_name: &Option<String>,
     owner: &Option<String>,
     extra: &Option<String>,
@@ -327,12 +316,9 @@ pub async fn domain_read_search(
     let offset = page * PAGE_SIZE;
     let next_offset = (page + 1) * PAGE_SIZE;
 
-    // Start Transaction
-    let mut tx = pool.begin().await.map_err(InternalServerError)?;
-
     // Pull the Domains
     let domains = domain_select_search(
-        &mut tx,
+        tx,
         domain_name,
         owner,
         extra,
@@ -344,7 +330,7 @@ pub async fn domain_read_search(
 
     // More domains present?
     let next_domain = domain_select_search(
-        &mut tx,
+        tx,
         domain_name,
         owner,
         extra,
@@ -365,7 +351,7 @@ pub async fn domain_read_search(
 
 /// Edit a Domain
 pub async fn domain_edit(
-    pool: &PgPool,
+    tx: &mut Transaction<'_, Postgres>,
     domain_name: &str,
     domain_param: &DomainParam,
     username: &str,
@@ -373,11 +359,8 @@ pub async fn domain_edit(
     // Make sure the payload we got is good (check with Validate package).
     domain_param.validate().map_err(BadRequest)?;
 
-    // Start Transaction
-    let mut tx = pool.begin().await.map_err(InternalServerError)?;
-
     // Update domain
-    let update = domain_update(&mut tx, domain_name, domain_param, username).await;
+    let update = domain_update(tx, domain_name, domain_param, username).await;
 
     // What result did we get?
     let domain = match update {
@@ -390,23 +373,17 @@ pub async fn domain_edit(
         Err(err) => Err(InternalServerError(err)),
     }?;
 
-    // Commit Transaction
-    tx.commit().await.map_err(InternalServerError)?;
-
     Ok(domain)
 }
 
 /// Remove a Domain
 pub async fn domain_remove(
-    pool: &PgPool,
+    tx: &mut Transaction<'_, Postgres>,
     domain_name: &str,
     //cascade: &bool,
 ) -> Result<Domain, poem::Error> {
-    // Start Transaction
-    let mut tx = pool.begin().await.map_err(InternalServerError)?;
-
     // Delete the domain
-    let delete = domain_drop(&mut tx, domain_name).await;
+    let delete = domain_drop(tx, domain_name).await;
 
     // What result did we get?
     let domain = match delete {
@@ -419,26 +396,20 @@ pub async fn domain_remove(
         Err(err) => Err(InternalServerError(err)),
     }?;
 
-    // Commit Transaction
-    tx.commit().await.map_err(InternalServerError)?;
-
     Ok(domain)
 }
 
 /// Add a model
 pub async fn model_add(
-    pool: &PgPool,
+    tx: &mut Transaction<'_, Postgres>,
     model_param: &ModelParam,
     username: &str,
 ) -> Result<Model, poem::Error> {
     // Make sure the payload we got is good (check with Validate package).
     model_param.validate().map_err(BadRequest)?;
 
-    // Start Transaction
-    let mut tx = pool.begin().await.map_err(InternalServerError)?;
-
     // Add Model
-    let insert = model_insert(&mut tx, model_param, username).await;
+    let insert = model_insert(tx, model_param, username).await;
 
     // What result did we get?
     let model = match insert {
@@ -451,26 +422,23 @@ pub async fn model_add(
         Err(err) => Err(InternalServerError(err)),
     }?;
 
-    // Commit Transaction
-    tx.commit().await.map_err(InternalServerError)?;
-
     Ok(model)
 }
 
 /// Read details of a model
-pub async fn model_read(pool: &PgPool, model_name: &str) -> Result<Model, poem::Error> {
-    // Start Transaction
-    let mut tx = pool.begin().await.map_err(InternalServerError)?;
-
+pub async fn model_read(
+    tx: &mut Transaction<'_, Postgres>,
+    model_name: &str,
+) -> Result<Model, poem::Error> {
     // Pull model
-    let model: Model = model_select(&mut tx, model_name).await.map_err(NotFound)?;
+    let model: Model = model_select(tx, model_name).await.map_err(NotFound)?;
 
     Ok(model)
 }
 
 /// Read details of many models
 pub async fn model_read_search(
-    pool: &PgPool,
+    tx: &mut Transaction<'_, Postgres>,
     model_name: &Option<String>,
     domain_name: &Option<String>,
     owner: &Option<String>,
@@ -481,12 +449,9 @@ pub async fn model_read_search(
     let offset = page * PAGE_SIZE;
     let next_offset = (page + 1) * PAGE_SIZE;
 
-    // Start Transaction
-    let mut tx = pool.begin().await.map_err(InternalServerError)?;
-
     // Pull the Models
     let models = model_select_search(
-        &mut tx,
+        tx,
         model_name,
         domain_name,
         owner,
@@ -499,7 +464,7 @@ pub async fn model_read_search(
 
     // More domains present?
     let next_model = model_select_search(
-        &mut tx,
+        tx,
         model_name,
         domain_name,
         owner,
@@ -520,7 +485,7 @@ pub async fn model_read_search(
 }
 /// Edit a Model
 pub async fn model_edit(
-    pool: &PgPool,
+    tx: &mut Transaction<'_, Postgres>,
     model_name: &str,
     model_param: &ModelParam,
     username: &str,
@@ -528,11 +493,8 @@ pub async fn model_edit(
     // Make sure the payload we got is good (check with Validate package).
     model_param.validate().map_err(BadRequest)?;
 
-    // Start Transaction
-    let mut tx = pool.begin().await.map_err(InternalServerError)?;
-
     // Update domain
-    let update = model_update(&mut tx, model_name, model_param, username).await;
+    let update = model_update(tx, model_name, model_param, username).await;
 
     // What result did we get?
     let model = match update {
@@ -545,40 +507,31 @@ pub async fn model_edit(
         Err(err) => Err(InternalServerError(err)),
     }?;
 
-    // Commit Transaction
-    tx.commit().await.map_err(InternalServerError)?;
-
     Ok(model)
 }
 
 /// Remove a Model
-pub async fn model_remove(pool: &PgPool, model_name: &str) -> Result<Model, poem::Error> {
-    // Start Transaction
-    let mut tx = pool.begin().await.map_err(InternalServerError)?;
-
+pub async fn model_remove(
+    tx: &mut Transaction<'_, Postgres>,
+    model_name: &str,
+) -> Result<Model, poem::Error> {
     // Delete the model
-    let model = model_drop(&mut tx, model_name).await.map_err(NotFound)?;
-
-    // Commit Transaction
-    tx.commit().await.map_err(InternalServerError)?;
+    let model = model_drop(tx, model_name).await.map_err(NotFound)?;
 
     Ok(model)
 }
 
 /// Add a model with fields
 pub async fn model_add_with_fields(
-    pool: &PgPool,
+    tx: &mut Transaction<'_, Postgres>,
     param: &ModelFieldsParam,
     username: &str,
 ) -> Result<ModelFields, poem::Error> {
     // Make sure the payload we got is good (check with Validate package).
     param.model.validate().map_err(BadRequest)?;
 
-    // Start Transaction
-    let mut tx = pool.begin().await.map_err(InternalServerError)?;
-
     // Add Model
-    let model_insert = model_insert(&mut tx, &param.model, username).await;
+    let model_insert = model_insert(tx, &param.model, username).await;
 
     // What result did we get?
     let model = match model_insert {
@@ -610,7 +563,7 @@ pub async fn model_add_with_fields(
         field_param.validate().map_err(BadRequest)?;
 
         // Insert the field
-        let field_insert = field_insert(&mut tx, &field_param, username).await;
+        let field_insert = field_insert(tx, &field_param, username).await;
 
         // What result did we get?
         let field = match field_insert {
@@ -632,17 +585,14 @@ pub async fn model_add_with_fields(
 
 /// Read details of a model and add fields details for that model
 pub async fn model_read_with_fields(
-    pool: &PgPool,
+    tx: &mut Transaction<'_, Postgres>,
     model_name: &str,
 ) -> Result<ModelFields, poem::Error> {
-    // Start Transaction
-    let mut tx = pool.begin().await.map_err(InternalServerError)?;
-
     // Pull domain_models
-    let model_fields = model_select(&mut tx, model_name)
+    let model_fields = model_select(tx, model_name)
         .await
         .map_err(NotFound)?
-        .add_fields(&mut tx)
+        .add_fields(tx)
         .await?;
 
     Ok(model_fields)
@@ -650,40 +600,31 @@ pub async fn model_read_with_fields(
 
 /// Delete a model with all its fields
 pub async fn model_remove_with_fields(
-    pool: &PgPool,
+    tx: &mut Transaction<'_, Postgres>,
     model_name: &str,
 ) -> Result<ModelFields, poem::Error> {
-    // Start Transaction
-    let mut tx = pool.begin().await.map_err(InternalServerError)?;
-
     // Delete all the fields
-    let fields = field_drop_by_model(&mut tx, model_name)
+    let fields = field_drop_by_model(tx, model_name)
         .await
         .map_err(NotFound)?;
 
     // Delete the model
-    let model = model_drop(&mut tx, model_name).await.map_err(NotFound)?;
-
-    // Commit Transaction
-    tx.commit().await.map_err(InternalServerError)?;
+    let model = model_drop(tx, model_name).await.map_err(NotFound)?;
 
     Ok(ModelFields { model, fields })
 }
 
 /// Add a field
 pub async fn field_add(
-    pool: &PgPool,
+    tx: &mut Transaction<'_, Postgres>,
     field_param: &FieldParam,
     username: &str,
 ) -> Result<Field, poem::Error> {
     // Make sure the payload we got is good (check with Validate package).
     field_param.validate().map_err(BadRequest)?;
 
-    // Start Transaction
-    let mut tx = pool.begin().await.map_err(InternalServerError)?;
-
     // Add Field
-    let insert = field_insert(&mut tx, field_param, username).await;
+    let insert = field_insert(tx, field_param, username).await;
 
     // What result did we get?
     let field = match insert {
@@ -696,23 +637,17 @@ pub async fn field_add(
         Err(err) => Err(InternalServerError(err)),
     }?;
 
-    // Commit Transaction
-    tx.commit().await.map_err(InternalServerError)?;
-
     Ok(field)
 }
 
 /// Read details of a field
 pub async fn field_read(
-    pool: &PgPool,
+    tx: &mut Transaction<'_, Postgres>,
     model_name: &str,
     field_name: &str,
 ) -> Result<Field, poem::Error> {
-    // Start Transaction
-    let mut tx = pool.begin().await.map_err(InternalServerError)?;
-
     // Pull field
-    let field = field_select(&mut tx, model_name, field_name)
+    let field = field_select(tx, model_name, field_name)
         .await
         .map_err(NotFound)?;
 
@@ -721,7 +656,7 @@ pub async fn field_read(
 
 /// Edit a Field
 pub async fn field_edit(
-    pool: &PgPool,
+    tx: &mut Transaction<'_, Postgres>,
     model_name: &str,
     field_name: &str,
     field_param: &FieldParam,
@@ -730,11 +665,8 @@ pub async fn field_edit(
     // Make sure the payload we got is good (check with Validate package).
     field_param.validate().map_err(BadRequest)?;
 
-    // Start Transaction
-    let mut tx = pool.begin().await.map_err(InternalServerError)?;
-
     // Update domain
-    let update = field_update(&mut tx, model_name, field_name, field_param, username).await;
+    let update = field_update(tx, model_name, field_name, field_param, username).await;
 
     // What result did we get?
     let field = match update {
@@ -747,28 +679,19 @@ pub async fn field_edit(
         Err(err) => Err(InternalServerError(err)),
     }?;
 
-    // Commit Transaction
-    tx.commit().await.map_err(InternalServerError)?;
-
     Ok(field)
 }
 
 /// Remove a Field
 pub async fn field_remove(
-    pool: &PgPool,
+    tx: &mut Transaction<'_, Postgres>,
     model_name: &str,
     field_name: &str,
 ) -> Result<Field, poem::Error> {
-    // Start Transaction
-    let mut tx = pool.begin().await.map_err(InternalServerError)?;
-
     // Delete the field
-    let field = field_drop(&mut tx, model_name, field_name)
+    let field = field_drop(tx, model_name, field_name)
         .await
         .map_err(NotFound)?;
-
-    // Commit Transaction
-    tx.commit().await.map_err(InternalServerError)?;
 
     Ok(field)
 }

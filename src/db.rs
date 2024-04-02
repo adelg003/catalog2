@@ -365,10 +365,10 @@ pub async fn model_select_search(
 
         // Fuzzy search
         if let Some(model_name) = model_name {
-            separated.push(format!("model.model LIKE '%{}%'", model_name));
+            separated.push(format!("model.name LIKE '%{}%'", model_name));
         }
         if let Some(domain_name) = domain_name {
-            separated.push(format!("domain.domain LIKE '%{}%'", domain_name));
+            separated.push(format!("domain.name LIKE '%{}%'", domain_name));
         }
         if let Some(owner) = owner {
             separated.push(format!("model.owner LIKE '%{}%'", owner));

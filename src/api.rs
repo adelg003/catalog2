@@ -63,8 +63,14 @@ impl Api {
         // Get user from authentication.
         let username = auth.username();
 
+        // Start Transaction
+        let mut tx = pool.begin().await.map_err(InternalServerError)?;
+
         // Run Domain add logic
-        let domain = domain_add(pool, &domain_param, username).await?;
+        let domain = domain_add(&mut tx, &domain_param, username).await?;
+
+        // Commit Transaction
+        tx.commit().await.map_err(InternalServerError)?;
 
         Ok(Json(domain))
     }
@@ -76,8 +82,11 @@ impl Api {
         Data(pool): Data<&PgPool>,
         Path(domain_name): Path<String>,
     ) -> Result<Json<Domain>, poem::Error> {
+        // Start Transaction
+        let mut tx = pool.begin().await.map_err(InternalServerError)?;
+
         // Pull domain
-        let domain = domain_read(pool, &domain_name).await?;
+        let domain = domain_read(&mut tx, &domain_name).await?;
 
         Ok(Json(domain))
     }
@@ -94,8 +103,14 @@ impl Api {
         // Get user from authentication.
         let username = auth.username();
 
+        // Start Transaction
+        let mut tx = pool.begin().await.map_err(InternalServerError)?;
+
         // Run Domain add logic
-        let domain = domain_edit(pool, &domain_name, &domain_param, username).await?;
+        let domain = domain_edit(&mut tx, &domain_name, &domain_param, username).await?;
+
+        // Commit Transaction
+        tx.commit().await.map_err(InternalServerError)?;
 
         Ok(Json(domain))
     }
@@ -108,8 +123,14 @@ impl Api {
         Data(pool): Data<&PgPool>,
         Path(domain_name): Path<String>,
     ) -> Result<Json<Domain>, poem::Error> {
+        // Start Transaction
+        let mut tx = pool.begin().await.map_err(InternalServerError)?;
+
         // Pull domain
-        let domain = domain_remove(pool, &domain_name).await?;
+        let domain = domain_remove(&mut tx, &domain_name).await?;
+
+        // Commit Transaction
+        tx.commit().await.map_err(InternalServerError)?;
 
         Ok(Json(domain))
     }
@@ -121,8 +142,11 @@ impl Api {
         Data(pool): Data<&PgPool>,
         Path(domain_name): Path<String>,
     ) -> Result<Json<DomainModels>, poem::Error> {
+        // Start Transaction
+        let mut tx = pool.begin().await.map_err(InternalServerError)?;
+
         // Pull domain
-        let domain = domain_read_with_models(pool, &domain_name).await?;
+        let domain = domain_read_with_models(&mut tx, &domain_name).await?;
 
         Ok(Json(domain))
     }
@@ -138,8 +162,14 @@ impl Api {
         // Get user from authentication.
         let username = auth.username();
 
+        // Start Transaction
+        let mut tx = pool.begin().await.map_err(InternalServerError)?;
+
         // Add a model
-        let model = model_add(pool, &model_param, username).await?;
+        let model = model_add(&mut tx, &model_param, username).await?;
+
+        // Commit Transaction
+        tx.commit().await.map_err(InternalServerError)?;
 
         Ok(Json(model))
     }
@@ -151,8 +181,11 @@ impl Api {
         Data(pool): Data<&PgPool>,
         Path(model_name): Path<String>,
     ) -> Result<Json<Model>, poem::Error> {
+        // Start Transaction
+        let mut tx = pool.begin().await.map_err(InternalServerError)?;
+
         // Pull model
-        let model = model_read(pool, &model_name).await?;
+        let model = model_read(&mut tx, &model_name).await?;
 
         Ok(Json(model))
     }
@@ -169,8 +202,14 @@ impl Api {
         // Get user from authentication.
         let username = auth.username();
 
+        // Start Transaction
+        let mut tx = pool.begin().await.map_err(InternalServerError)?;
+
         // Run Model add logic
-        let model = model_edit(pool, &model_name, &model_param, username).await?;
+        let model = model_edit(&mut tx, &model_name, &model_param, username).await?;
+
+        // Commit Transaction
+        tx.commit().await.map_err(InternalServerError)?;
 
         Ok(Json(model))
     }
@@ -183,8 +222,14 @@ impl Api {
         Data(pool): Data<&PgPool>,
         Path(model_name): Path<String>,
     ) -> Result<Json<Model>, poem::Error> {
+        // Start Transaction
+        let mut tx = pool.begin().await.map_err(InternalServerError)?;
+
         // Delete Model
-        let model = model_remove(pool, &model_name).await?;
+        let model = model_remove(&mut tx, &model_name).await?;
+
+        // Commit Transaction
+        tx.commit().await.map_err(InternalServerError)?;
 
         Ok(Json(model))
     }
@@ -200,8 +245,14 @@ impl Api {
         // Get user from authentication.
         let username = auth.username();
 
+        // Start Transaction
+        let mut tx = pool.begin().await.map_err(InternalServerError)?;
+
         // Add a model and its field
-        let model_fields = model_add_with_fields(pool, &param, username).await?;
+        let model_fields = model_add_with_fields(&mut tx, &param, username).await?;
+
+        // Commit Transaction
+        tx.commit().await.map_err(InternalServerError)?;
 
         Ok(Json(model_fields))
     }
@@ -213,8 +264,11 @@ impl Api {
         Data(pool): Data<&PgPool>,
         Path(model_name): Path<String>,
     ) -> Result<Json<ModelFields>, poem::Error> {
+        // Start Transaction
+        let mut tx = pool.begin().await.map_err(InternalServerError)?;
+
         // Pull domain
-        let model_fields = model_read_with_fields(pool, &model_name).await?;
+        let model_fields = model_read_with_fields(&mut tx, &model_name).await?;
 
         Ok(Json(model_fields))
     }
@@ -227,8 +281,14 @@ impl Api {
         Data(pool): Data<&PgPool>,
         Path(model_name): Path<String>,
     ) -> Result<Json<ModelFields>, poem::Error> {
+        // Start Transaction
+        let mut tx = pool.begin().await.map_err(InternalServerError)?;
+
         // Delete Model
-        let model_fields = model_remove_with_fields(pool, &model_name).await?;
+        let model_fields = model_remove_with_fields(&mut tx, &model_name).await?;
+
+        // Commit Transaction
+        tx.commit().await.map_err(InternalServerError)?;
 
         Ok(Json(model_fields))
     }
@@ -244,8 +304,14 @@ impl Api {
         // Get user from authentication.
         let username = auth.username();
 
+        // Start Transaction
+        let mut tx = pool.begin().await.map_err(InternalServerError)?;
+
         // Run Domain add logic
-        let field = field_add(pool, &field_param, username).await?;
+        let field = field_add(&mut tx, &field_param, username).await?;
+
+        // Commit Transaction
+        tx.commit().await.map_err(InternalServerError)?;
 
         Ok(Json(field))
     }
@@ -258,8 +324,11 @@ impl Api {
         Path(model_name): Path<String>,
         Path(field_name): Path<String>,
     ) -> Result<Json<Field>, poem::Error> {
+        // Start Transaction
+        let mut tx = pool.begin().await.map_err(InternalServerError)?;
+
         // Pull field
-        let field = field_read(pool, &model_name, &field_name).await?;
+        let field = field_read(&mut tx, &model_name, &field_name).await?;
 
         Ok(Json(field))
     }
@@ -277,8 +346,14 @@ impl Api {
         // Get user from authentication.
         let username = auth.username();
 
+        // Start Transaction
+        let mut tx = pool.begin().await.map_err(InternalServerError)?;
+
         // Run Model add logic
-        let field = field_edit(pool, &model_name, &field_name, &field_param, username).await?;
+        let field = field_edit(&mut tx, &model_name, &field_name, &field_param, username).await?;
+
+        // Commit Transaction
+        tx.commit().await.map_err(InternalServerError)?;
 
         Ok(Json(field))
     }
@@ -292,8 +367,14 @@ impl Api {
         Path(model_name): Path<String>,
         Path(field_name): Path<String>,
     ) -> Result<Json<Field>, poem::Error> {
+        // Start Transaction
+        let mut tx = pool.begin().await.map_err(InternalServerError)?;
+
         // Delete Field
-        let field = field_remove(pool, &model_name, &field_name).await?;
+        let field = field_remove(&mut tx, &model_name, &field_name).await?;
+
+        // Commit Transaction
+        tx.commit().await.map_err(InternalServerError)?;
 
         Ok(Json(field))
     }
@@ -311,8 +392,12 @@ impl Api {
         // Default no page to 0
         let page = page.unwrap_or(0);
 
+        // Start Transaction
+        let mut tx = pool.begin().await.map_err(InternalServerError)?;
+
         // Pull domain
-        let domain_search = domain_read_search(pool, &domain_name, &owner, &extra, &page).await?;
+        let domain_search =
+            domain_read_search(&mut tx, &domain_name, &owner, &extra, &page).await?;
 
         Ok(Json(domain_search))
     }
@@ -331,9 +416,12 @@ impl Api {
         // Default no page to 0
         let page = page.unwrap_or(0);
 
+        // Start Transaction
+        let mut tx = pool.begin().await.map_err(InternalServerError)?;
+
         // Pull models
         let model_search =
-            model_read_search(pool, &model_name, &domain_name, &owner, &extra, &page).await?;
+            model_read_search(&mut tx, &model_name, &domain_name, &owner, &extra, &page).await?;
 
         Ok(Json(model_search))
     }
