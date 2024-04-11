@@ -1,4 +1,6 @@
-use crate::core::{DbxDataType, Domain, DomainParam, Field, FieldParam, Model, ModelParam};
+use crate::core::{
+    DbxDataType, Domain, DomainParam, Field, FieldParam, FieldParamUpdate, Model, ModelParam,
+};
 use chrono::Utc;
 use sqlx::{query, query_as, Postgres, QueryBuilder, Transaction};
 
@@ -110,13 +112,13 @@ pub async fn domain_select_search(
 
         // Fuzzy search
         if let Some(domain_name) = domain_name {
-            separated.push(format!("name LIKE '%{}%'", domain_name));
+            separated.push(format!("name ILIKE '%{}%'", domain_name));
         }
         if let Some(owner) = owner {
-            separated.push(format!("owner LIKE '%{}%'", owner));
+            separated.push(format!("owner ILIKE '%{}%'", owner));
         }
         if let Some(extra) = extra {
-            separated.push(format!("extra::text LIKE '%{}%'", extra));
+            separated.push(format!("extra::text ILIKE '%{}%'", extra));
         }
     }
 
@@ -365,16 +367,16 @@ pub async fn model_select_search(
 
         // Fuzzy search
         if let Some(model_name) = model_name {
-            separated.push(format!("model.name LIKE '%{}%'", model_name));
+            separated.push(format!("model.name ILIKE '%{}%'", model_name));
         }
         if let Some(domain_name) = domain_name {
-            separated.push(format!("domain.name LIKE '%{}%'", domain_name));
+            separated.push(format!("domain.name ILIKE '%{}%'", domain_name));
         }
         if let Some(owner) = owner {
-            separated.push(format!("model.owner LIKE '%{}%'", owner));
+            separated.push(format!("model.owner ILIKE '%{}%'", owner));
         }
         if let Some(extra) = extra {
-            separated.push(format!("model.extra::text LIKE '%{}%'", extra));
+            separated.push(format!("model.extra::text ILIKE '%{}%'", extra));
         }
     }
 
@@ -628,31 +630,28 @@ pub async fn field_update(
     tx: &mut Transaction<'_, Postgres>,
     model_name: &str,
     field_name: &str,
-    field_param: &FieldParam,
+    field_param: &FieldParamUpdate,
     username: &str,
 ) -> Result<Field, sqlx::Error> {
-    let source_model = model_select(tx, model_name).await?;
-    let dest_model = model_select(tx, &field_param.model_name).await?;
+    let model = model_select(tx, model_name).await?;
 
     let rows_affected = query!(
         "UPDATE
             field
         SET 
             name = $1,
-            model_id = $2,
-            is_primary = $3,
-            data_type = $4,
-            is_nullable = $5,
-            precision = $6,
-            scale = $7,
-            extra = $8,
-            modified_by = $9,
-            modified_date = $10
+            is_primary = $2,
+            data_type = $3,
+            is_nullable = $4,
+            precision = $5,
+            scale = $6,
+            extra = $7,
+            modified_by = $8,
+            modified_date = $9
         WHERE
-            model_id = $11
-            AND name = $12",
+            model_id = $10
+            AND name = $11",
         field_param.name,
-        dest_model.id,
         field_param.is_primary,
         field_param.data_type as DbxDataType,
         field_param.is_nullable,
@@ -661,7 +660,7 @@ pub async fn field_update(
         field_param.extra,
         username,
         Utc::now(),
-        source_model.id,
+        model.id,
         field_name,
     )
     .execute(&mut **tx)
@@ -674,7 +673,7 @@ pub async fn field_update(
     }
 
     // Pull the row, but with the domain name added
-    let field = field_select(tx, &field_param.model_name, &field_param.name).await?;
+    let field = field_select(tx, model_name, &field_param.name).await?;
 
     Ok(field)
 }
@@ -726,6 +725,429 @@ pub async fn field_drop_by_model(
     .await?;
 
     Ok(fields)
+}
+
+#[cfg(test)]
+mod tests {
+    use core::panic;
+
+    use super::*;
+    use pretty_assertions::assert_eq;
+    use serde_json::json;
+    use sqlx::PgPool;
+
+    fn gen_test_domain_parm(name: &str) -> DomainParam {
+        DomainParam {
+            name: name.to_string(),
+            owner: format!("{}@test.com", name),
+            extra: json!({
+                "abc": 123,
+                "def": [1, 2, 3],
+            }),
+        }
+    }
+
+    fn gen_test_model_parm(name: &str, domain_name: &str) -> ModelParam {
+        ModelParam {
+            name: name.to_string(),
+            domain_name: domain_name.to_string(),
+            owner: format!("{}@test.com", name),
+            extra: json!({
+                "abc": 123,
+                "def": [1, 2, 3],
+            }),
+        }
+    }
+
+    /// Test create domain
+    #[sqlx::test]
+    async fn test_domain_insert(pool: PgPool) {
+        let domain = {
+            let domain_param = gen_test_domain_parm("test_domain");
+
+            let mut tx = pool.begin().await.unwrap();
+            let domain = domain_insert(&mut tx, &domain_param, "test").await.unwrap();
+
+            tx.commit().await.unwrap();
+
+            domain
+        };
+
+        assert_eq!(domain.id, 1);
+        assert_eq!(domain.name, "test_domain");
+        assert_eq!(domain.owner, "test_domain@test.com");
+        assert_eq!(
+            domain.extra,
+            json!({
+                "abc": 123,
+                "def": [1, 2, 3],
+            }),
+        );
+        assert_eq!(domain.created_by, "test");
+        assert_eq!(domain.modified_by, "test");
+    }
+
+    /// Test double domain create conflict
+    #[sqlx::test]
+    async fn test_domain_insert_conflict(pool: PgPool) {
+        let domain_param = gen_test_domain_parm("test_domain");
+
+        {
+            let mut tx = pool.begin().await.unwrap();
+            domain_insert(&mut tx, &domain_param, "test").await.unwrap();
+
+            tx.commit().await.unwrap();
+        }
+
+        let err = {
+            let mut tx = pool.begin().await.unwrap();
+            domain_insert(&mut tx, &domain_param, "test")
+                .await
+                .unwrap_err()
+        };
+
+        match err {
+            sqlx::Error::Database(err) => assert_eq!(
+                err.message().to_string(),
+                "duplicate key value violates unique constraint \"domain_name_key\"",
+            ),
+            err => panic!("Incorrect sqlx error type: {}", err),
+        };
+    }
+
+    /// Test domain select
+    #[sqlx::test]
+    async fn test_domain_select(pool: PgPool) {
+        {
+            let domain_param = gen_test_domain_parm("test_domain");
+
+            let mut tx = pool.begin().await.unwrap();
+            domain_insert(&mut tx, &domain_param, "test").await.unwrap();
+
+            tx.commit().await.unwrap();
+        }
+
+        let domain = {
+            let mut tx = pool.begin().await.unwrap();
+            domain_select(&mut tx, "test_domain").await.unwrap()
+        };
+
+        assert_eq!(domain.id, 1);
+        assert_eq!(domain.name, "test_domain");
+        assert_eq!(domain.owner, "test_domain@test.com");
+        assert_eq!(
+            domain.extra,
+            json!({
+                "abc": 123,
+                "def": [1, 2, 3],
+            }),
+        );
+        assert_eq!(domain.created_by, "test");
+        assert_eq!(domain.modified_by, "test");
+    }
+
+    /// Test Reading a domain that does not exists
+    #[sqlx::test]
+    async fn test_domain_select_not_found(pool: PgPool) {
+        let err = {
+            let mut tx = pool.begin().await.unwrap();
+            domain_select(&mut tx, "test_domain").await.unwrap_err()
+        };
+
+        match err {
+            sqlx::Error::RowNotFound => (),
+            err => panic!("Incorrect sqlx error type: {}", err),
+        };
+    }
+
+    /// Test domain search
+    #[sqlx::test]
+    async fn test_domain_search(pool: PgPool) {
+        {
+            let mut tx = pool.begin().await.unwrap();
+
+            let domain_param = gen_test_domain_parm("test_domain");
+            domain_insert(&mut tx, &domain_param, "test").await.unwrap();
+
+            let domain_param = gen_test_domain_parm("foobar_domain");
+            domain_insert(&mut tx, &domain_param, "foobar")
+                .await
+                .unwrap();
+
+            tx.commit().await.unwrap();
+        }
+
+        {
+            let mut tx = pool.begin().await.unwrap();
+            let domains = domain_select_search(&mut tx, &None, &None, &None, &None, &None)
+                .await
+                .unwrap();
+
+            assert_eq!(domains.len(), 2);
+        }
+
+        {
+            let mut tx = pool.begin().await.unwrap();
+            let domains = domain_select_search(
+                &mut tx,
+                &Some("abcdef".to_string()),
+                &None,
+                &None,
+                &None,
+                &None,
+            )
+            .await
+            .unwrap();
+
+            assert_eq!(domains.len(), 0);
+        }
+
+        {
+            let mut tx = pool.begin().await.unwrap();
+            let domains = domain_select_search(
+                &mut tx,
+                &Some("test".to_string()),
+                &None,
+                &None,
+                &None,
+                &None,
+            )
+            .await
+            .unwrap();
+
+            assert_eq!(domains.len(), 1);
+            assert_eq!(domains[0].name, "test_domain");
+        }
+
+        {
+            let mut tx = pool.begin().await.unwrap();
+            let domains = domain_select_search(
+                &mut tx,
+                &Some("test".to_string()),
+                &Some("test.com".to_string()),
+                &None,
+                &None,
+                &None,
+            )
+            .await
+            .unwrap();
+
+            assert_eq!(domains.len(), 1);
+            assert_eq!(domains[0].name, "test_domain");
+        }
+
+        {
+            let mut tx = pool.begin().await.unwrap();
+            let domains = domain_select_search(
+                &mut tx,
+                &Some("test".to_string()),
+                &Some("test.com".to_string()),
+                &Some("abc".to_string()),
+                &None,
+                &None,
+            )
+            .await
+            .unwrap();
+
+            assert_eq!(domains.len(), 1);
+            assert_eq!(domains[0].name, "test_domain");
+        }
+
+        {
+            let mut tx = pool.begin().await.unwrap();
+            let domains = domain_select_search(&mut tx, &None, &None, &None, &Some(1), &None)
+                .await
+                .unwrap();
+
+            assert_eq!(domains.len(), 1);
+            assert_eq!(domains[0].name, "test_domain");
+        }
+
+        {
+            let mut tx = pool.begin().await.unwrap();
+            let domains = domain_select_search(&mut tx, &None, &None, &None, &Some(1), &Some(1))
+                .await
+                .unwrap();
+
+            assert_eq!(domains.len(), 1);
+            assert_eq!(domains[0].name, "foobar_domain");
+        }
+    }
+
+    /// Test domain update
+    #[sqlx::test]
+    async fn test_domain_update(pool: PgPool) {
+        {
+            let domain_param = gen_test_domain_parm("test_domain");
+
+            let mut tx = pool.begin().await.unwrap();
+            domain_insert(&mut tx, &domain_param, "test").await.unwrap();
+
+            tx.commit().await.unwrap();
+        }
+
+        let domain = {
+            let domain_param = gen_test_domain_parm("foobar_domain");
+
+            let mut tx = pool.begin().await.unwrap();
+            domain_update(&mut tx, "test_domain", &domain_param, "foobar")
+                .await
+                .unwrap()
+        };
+
+        assert_eq!(domain.id, 1);
+        assert_eq!(domain.name, "foobar_domain");
+        assert_eq!(domain.owner, "foobar_domain@test.com");
+        assert_eq!(
+            domain.extra,
+            json!({
+                "abc": 123,
+                "def": [1, 2, 3],
+            }),
+        );
+        assert_eq!(domain.created_by, "test");
+        assert_eq!(domain.modified_by, "foobar");
+    }
+
+    /// Test domain update where no domain found
+    #[sqlx::test]
+    async fn test_domain_update_not_found(pool: PgPool) {
+        let err = {
+            let domain_param = gen_test_domain_parm("test_domain");
+
+            let mut tx = pool.begin().await.unwrap();
+            domain_update(&mut tx, "test_domain", &domain_param, "test")
+                .await
+                .unwrap_err()
+        };
+
+        match err {
+            sqlx::Error::RowNotFound => (),
+            err => panic!("Incorrect sqlx error type: {}", err),
+        };
+    }
+
+    /// Test domain update with conflict
+    #[sqlx::test]
+    async fn test_domain_update_conflict(pool: PgPool) {
+        {
+            let mut tx = pool.begin().await.unwrap();
+
+            let domain_param = gen_test_domain_parm("test_domain");
+            domain_insert(&mut tx, &domain_param, "test").await.unwrap();
+
+            let domain_param = gen_test_domain_parm("foobar_domain");
+            domain_insert(&mut tx, &domain_param, "foobar")
+                .await
+                .unwrap();
+
+            tx.commit().await.unwrap();
+        }
+
+        let err = {
+            let domain_param = gen_test_domain_parm("foobar_domain");
+
+            let mut tx = pool.begin().await.unwrap();
+            domain_update(&mut tx, "test_domain", &domain_param, "foobar")
+                .await
+                .unwrap_err()
+        };
+
+        match err {
+            sqlx::Error::Database(err) => assert_eq!(
+                err.message().to_string(),
+                "duplicate key value violates unique constraint \"domain_name_key\"",
+            ),
+            err => panic!("Incorrect sqlx error type: {}", err),
+        };
+    }
+
+    /// Test domain drop
+    #[sqlx::test]
+    async fn test_domain_drop(pool: PgPool) {
+        {
+            let domain_param = gen_test_domain_parm("test_domain");
+
+            let mut tx = pool.begin().await.unwrap();
+            domain_insert(&mut tx, &domain_param, "test").await.unwrap();
+
+            tx.commit().await.unwrap();
+        }
+
+        let domain = {
+            let mut tx = pool.begin().await.unwrap();
+            let domain = domain_drop(&mut tx, "test_domain").await.unwrap();
+
+            tx.commit().await.unwrap();
+
+            domain
+        };
+
+        assert_eq!(domain.id, 1);
+        assert_eq!(domain.name, "test_domain");
+        assert_eq!(domain.owner, "test_domain@test.com");
+        assert_eq!(
+            domain.extra,
+            json!({
+                "abc": 123,
+                "def": [1, 2, 3],
+            }),
+        );
+        assert_eq!(domain.created_by, "test");
+        assert_eq!(domain.modified_by, "test");
+
+        let err = {
+            let mut tx = pool.begin().await.unwrap();
+            domain_select(&mut tx, "test_domain").await.unwrap_err()
+        };
+
+        match err {
+            sqlx::Error::RowNotFound => (),
+            err => panic!("Incorrect sqlx error type: {}", err),
+        };
+    }
+
+    /// Test domain drop if not exists
+    #[sqlx::test]
+    async fn test_domain_drop_not_found(pool: PgPool) {
+        let err = {
+            let mut tx = pool.begin().await.unwrap();
+            domain_drop(&mut tx, "test_domain").await.unwrap_err()
+        };
+
+        match err {
+            sqlx::Error::RowNotFound => (),
+            err => panic!("Incorrect sqlx error type: {}", err),
+        };
+    }
+
+    /// Test domain drop if children not droppped
+    #[sqlx::test]
+    async fn test_domain_drop_conflict(pool: PgPool) {
+        {
+            let domain_param = gen_test_domain_parm("test_domain");
+            let model_param = gen_test_model_parm("test_model", "test_domain");
+
+            let mut tx = pool.begin().await.unwrap();
+            domain_insert(&mut tx, &domain_param, "test").await.unwrap();
+            model_insert(&mut tx, &model_param, "test").await.unwrap();
+
+            tx.commit().await.unwrap();
+        }
+
+        let err = {
+            let mut tx = pool.begin().await.unwrap();
+            domain_drop(&mut tx, "test_domain").await.unwrap_err()
+        };
+
+        match err {
+            sqlx::Error::Database(err) => assert_eq!(
+                err.message().to_string(),
+                "update or delete on table \"domain\" violates foreign key constraint \"model_domain_id_fkey\" on table \"model\"",
+            ),
+            err => panic!("Incorrect sqlx error type: {}", err),
+        };
+    }
 }
 
 //TODO Add Unit Test

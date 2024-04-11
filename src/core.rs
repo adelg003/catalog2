@@ -50,6 +50,7 @@ impl Domain {
 /// How to create a new domain
 #[derive(Debug, Object, Validate)]
 pub struct DomainParam {
+    #[validate(custom(function = dbx_validater))]
     pub name: String,
     #[validate(email)]
     pub owner: String,
@@ -187,32 +188,67 @@ impl FieldParam {
         dbx_validater(&self.model_name)?;
 
         // Validate dtype parameters
-        match (self.data_type, self.precision, self.scale) {
-            (DbxDataType::Decimal, Some(_), Some(_)) => Ok(()),
-            (
-                DbxDataType::BigInt
-                | DbxDataType::Binary
-                | DbxDataType::Boolean
-                | DbxDataType::Date
-                | DbxDataType::Double
-                | DbxDataType::Float
-                | DbxDataType::Int
-                | DbxDataType::Interval
-                | DbxDataType::Void
-                | DbxDataType::SmallInt
-                | DbxDataType::String
-                | DbxDataType::Timestamp
-                | DbxDataType::TimestampNtz
-                | DbxDataType::TinyInt,
-                None,
-                None,
-            ) => Ok(()),
-            _ => Err(ValidationError::new(
-                "Only Deciaml data type should have scale and precision",
-            )),
-        }?;
+        validate_data_type(&self.data_type, &self.precision, &self.scale)?;
 
         Ok(())
+    }
+}
+
+/// How to update an existing model
+#[derive(Object, Validate)]
+pub struct FieldParamUpdate {
+    pub name: String,
+    pub is_primary: bool,
+    pub data_type: DbxDataType,
+    pub is_nullable: bool,
+    pub precision: Option<i32>,
+    pub scale: Option<i32>,
+    pub extra: serde_json::Value,
+}
+
+impl FieldParamUpdate {
+    /// Ensure only decimals get the precision and scale parameters
+    fn validate(&self) -> Result<(), ValidationError> {
+        // Validate model and field names
+        dbx_validater(&self.name)?;
+
+        // Validate dtype parameters
+        validate_data_type(&self.data_type, &self.precision, &self.scale)?;
+
+        Ok(())
+    }
+}
+
+/// Validate Datatype in Field
+fn validate_data_type(
+    data_type: &DbxDataType,
+    precision: &Option<i32>,
+    scale: &Option<i32>,
+) -> Result<(), ValidationError> {
+    // Validate dtype parameters
+    match (data_type, precision, scale) {
+        (DbxDataType::Decimal, Some(_), Some(_)) => Ok(()),
+        (
+            DbxDataType::BigInt
+            | DbxDataType::Binary
+            | DbxDataType::Boolean
+            | DbxDataType::Date
+            | DbxDataType::Double
+            | DbxDataType::Float
+            | DbxDataType::Int
+            | DbxDataType::Interval
+            | DbxDataType::Void
+            | DbxDataType::SmallInt
+            | DbxDataType::String
+            | DbxDataType::Timestamp
+            | DbxDataType::TimestampNtz
+            | DbxDataType::TinyInt,
+            None,
+            None,
+        ) => Ok(()),
+        _ => Err(ValidationError::new(
+            "Only Deciaml data type should have scale and precision",
+        )),
     }
 }
 
@@ -659,7 +695,7 @@ pub async fn field_edit(
     tx: &mut Transaction<'_, Postgres>,
     model_name: &str,
     field_name: &str,
-    field_param: &FieldParam,
+    field_param: &FieldParamUpdate,
     username: &str,
 ) -> Result<Field, poem::Error> {
     // Make sure the payload we got is good (check with Validate package).

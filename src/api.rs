@@ -5,7 +5,8 @@ use crate::{
         domain_remove, field_add, field_edit, field_read, field_remove, model_add,
         model_add_with_fields, model_edit, model_read, model_read_search, model_read_with_fields,
         model_remove, model_remove_with_fields, Domain, DomainModels, DomainParam, DomainSearch,
-        Field, FieldParam, Model, ModelFields, ModelFieldsParam, ModelParam, ModelSearch,
+        Field, FieldParam, FieldParamUpdate, Model, ModelFields, ModelFieldsParam, ModelParam,
+        ModelSearch,
     },
 };
 use jsonwebtoken::EncodingKey;
@@ -341,7 +342,7 @@ impl Api {
         Data(pool): Data<&PgPool>,
         Path(model_name): Path<String>,
         Path(field_name): Path<String>,
-        Json(field_param): Json<FieldParam>,
+        Json(field_param): Json<FieldParamUpdate>,
     ) -> Result<Json<Field>, poem::Error> {
         // Get user from authentication.
         let username = auth.username();

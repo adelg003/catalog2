@@ -21,3 +21,6 @@ sqlx = { version = "0.7.4", features = ["chrono", "json", "postgres", "runtime-t
 tokio = { version = "1.36.0", features = ["rt-multi-thread"] }
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 validator = { version = "0.17.0", features = ["derive"] }
+
+[dev-dependencies]
+pretty_assertions = "1.4.0"
