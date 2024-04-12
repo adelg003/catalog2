@@ -66,7 +66,7 @@ pub struct DomainSearch {
 }
 
 /// Model to return via the API
-#[derive(FromRow, Object)]
+#[derive(Debug, FromRow, Object)]
 pub struct Model {
     pub id: i32,
     pub name: String,
@@ -126,7 +126,7 @@ pub struct DomainModels {
 
 /// Databrick Dataypes
 /// https://learn.microsoft.com/en-us/azure/databricks/sql/language-manual/sql-ref-datatypes
-#[derive(Clone, Copy, Enum, Type)]
+#[derive(Clone, Copy, Debug, Enum, PartialEq, Type)]
 #[oai(rename_all = "lowercase")]
 #[sqlx(type_name = "dbx_data_type", rename_all = "lowercase")]
 pub enum DbxDataType {
@@ -148,7 +148,7 @@ pub enum DbxDataType {
 }
 
 /// Field to return via the API
-#[derive(FromRow, Object)]
+#[derive(Debug, FromRow, Object)]
 pub struct Field {
     pub id: i32,
     pub name: String,
@@ -552,7 +552,18 @@ pub async fn model_remove(
     model_name: &str,
 ) -> Result<Model, poem::Error> {
     // Delete the model
-    let model = model_drop(tx, model_name).await.map_err(NotFound)?;
+    let delete = model_drop(tx, model_name).await;
+
+    // What result did we get?
+    let model = match delete {
+        Ok(model) => Ok(model),
+        Err(sqlx::Error::RowNotFound) => Err(poem::Error::from_string(
+            "model does not exist",
+            StatusCode::NOT_FOUND,
+        )),
+        Err(sqlx::Error::Database(err)) => Err(Conflict(err)),
+        Err(err) => Err(InternalServerError(err)),
+    }?;
 
     Ok(model)
 }
@@ -642,7 +653,7 @@ pub async fn model_remove_with_fields(
     // Delete all the fields
     let fields = field_drop_by_model(tx, model_name)
         .await
-        .map_err(NotFound)?;
+        .map_err(InternalServerError)?;
 
     // Delete the model
     let model = model_drop(tx, model_name).await.map_err(NotFound)?;

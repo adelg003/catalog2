@@ -406,6 +406,7 @@ pub async fn model_update(
     model_param: &ModelParam,
     username: &str,
 ) -> Result<Model, sqlx::Error> {
+    // Make sure related domain exists
     let domain = domain_select(tx, &model_param.domain_name).await?;
 
     let rows_affected = query!(
@@ -736,6 +737,7 @@ mod tests {
     use serde_json::json;
     use sqlx::PgPool;
 
+    /// Create test domain
     fn gen_test_domain_parm(name: &str) -> DomainParam {
         DomainParam {
             name: name.to_string(),
@@ -747,6 +749,7 @@ mod tests {
         }
     }
 
+    /// Create test model
     fn gen_test_model_parm(name: &str, domain_name: &str) -> ModelParam {
         ModelParam {
             name: name.to_string(),
@@ -756,6 +759,38 @@ mod tests {
                 "abc": 123,
                 "def": [1, 2, 3],
             }),
+        }
+    }
+
+    /// Create test Field
+    fn gen_test_field_parm(name: &str, model_name: &str) -> FieldParam {
+        FieldParam {
+            name: name.to_string(),
+            model_name: model_name.to_string(),
+            is_primary: false,
+            data_type: DbxDataType::Decimal,
+            is_nullable: true,
+            precision: Some(8),
+            scale: Some(2),
+            extra: json!({
+                "abc": 123,
+                "def": [1, 2, 3],
+            }),
+        }
+    }
+
+    impl FieldParam {
+        /// Turn FieldParam into FieldParamUpdate
+        fn into_update(self) -> FieldParamUpdate {
+            FieldParamUpdate {
+                name: self.name,
+                is_primary: self.is_primary,
+                data_type: self.data_type,
+                is_nullable: self.is_nullable,
+                precision: self.precision,
+                scale: self.scale,
+                extra: self.extra,
+            }
         }
     }
 
@@ -1148,6 +1183,1075 @@ mod tests {
             err => panic!("Incorrect sqlx error type: {}", err),
         };
     }
-}
 
-//TODO Add Unit Test
+    /// Test create model
+    #[sqlx::test]
+    async fn test_model_insert(pool: PgPool) {
+        let model = {
+            let domain_param = gen_test_domain_parm("test_domain");
+            let model_param = gen_test_model_parm("test_model", "test_domain");
+
+            let mut tx = pool.begin().await.unwrap();
+            domain_insert(&mut tx, &domain_param, "test").await.unwrap();
+            let model = model_insert(&mut tx, &model_param, "test").await.unwrap();
+
+            tx.commit().await.unwrap();
+
+            model
+        };
+
+        assert_eq!(model.id, 1);
+        assert_eq!(model.name, "test_model");
+        assert_eq!(model.domain_id, 1);
+        assert_eq!(model.domain_name, "test_domain");
+        assert_eq!(model.owner, "test_model@test.com");
+        assert_eq!(
+            model.extra,
+            json!({
+                "abc": 123,
+                "def": [1, 2, 3],
+            }),
+        );
+        assert_eq!(model.created_by, "test");
+        assert_eq!(model.modified_by, "test");
+    }
+
+    /// Test model insert where no domain found
+    #[sqlx::test]
+    async fn test_model_insert_not_found(pool: PgPool) {
+        let err = {
+            let model_param = gen_test_model_parm("test_model", "test_domain");
+
+            let mut tx = pool.begin().await.unwrap();
+            model_insert(&mut tx, &model_param, "test")
+                .await
+                .unwrap_err()
+        };
+
+        match err {
+            sqlx::Error::RowNotFound => (),
+            err => panic!("Incorrect sqlx error type: {}", err),
+        };
+    }
+
+    /// Test double model create conflict
+    #[sqlx::test]
+    async fn test_model_insert_conflict(pool: PgPool) {
+        let model_param = gen_test_model_parm("test_model", "test_domain");
+
+        {
+            let domain_param = gen_test_domain_parm("test_domain");
+
+            let mut tx = pool.begin().await.unwrap();
+            domain_insert(&mut tx, &domain_param, "test").await.unwrap();
+            model_insert(&mut tx, &model_param, "test").await.unwrap();
+
+            tx.commit().await.unwrap();
+        }
+
+        let err = {
+            let mut tx = pool.begin().await.unwrap();
+            model_insert(&mut tx, &model_param, "test")
+                .await
+                .unwrap_err()
+        };
+
+        match err {
+            sqlx::Error::Database(err) => assert_eq!(
+                err.message().to_string(),
+                "duplicate key value violates unique constraint \"model_name_key\"",
+            ),
+            err => panic!("Incorrect sqlx error type: {}", err),
+        };
+    }
+
+    /// Test model select
+    #[sqlx::test]
+    async fn test_model_select(pool: PgPool) {
+        {
+            let domain_param = gen_test_domain_parm("test_domain");
+            let model_param = gen_test_model_parm("test_model", "test_domain");
+
+            let mut tx = pool.begin().await.unwrap();
+            domain_insert(&mut tx, &domain_param, "test").await.unwrap();
+            model_insert(&mut tx, &model_param, "test").await.unwrap();
+
+            tx.commit().await.unwrap();
+        }
+
+        let model = {
+            let mut tx = pool.begin().await.unwrap();
+            model_select(&mut tx, "test_model").await.unwrap()
+        };
+
+        assert_eq!(model.id, 1);
+        assert_eq!(model.name, "test_model");
+        assert_eq!(model.domain_id, 1);
+        assert_eq!(model.domain_name, "test_domain");
+        assert_eq!(model.owner, "test_model@test.com");
+        assert_eq!(
+            model.extra,
+            json!({
+                "abc": 123,
+                "def": [1, 2, 3],
+            }),
+        );
+        assert_eq!(model.created_by, "test");
+        assert_eq!(model.modified_by, "test");
+    }
+
+    /// Test Reading a model that does not exists
+    #[sqlx::test]
+    async fn test_model_select_not_found(pool: PgPool) {
+        let err = {
+            let mut tx = pool.begin().await.unwrap();
+            model_select(&mut tx, "test_model").await.unwrap_err()
+        };
+
+        match err {
+            sqlx::Error::RowNotFound => (),
+            err => panic!("Incorrect sqlx error type: {}", err),
+        };
+    }
+
+    /// Test model select by domain
+    #[sqlx::test]
+    async fn test_model_select_by_domain(pool: PgPool) {
+        {
+            let mut tx = pool.begin().await.unwrap();
+            let models = model_select_by_domain(&mut tx, "test_domain")
+                .await
+                .unwrap();
+
+            assert_eq!(models.len(), 0);
+        }
+
+        {
+            let domain_param = gen_test_domain_parm("test_domain");
+
+            let mut tx = pool.begin().await.unwrap();
+            domain_insert(&mut tx, &domain_param, "test").await.unwrap();
+
+            tx.commit().await.unwrap();
+        }
+
+        {
+            let mut tx = pool.begin().await.unwrap();
+            let models = model_select_by_domain(&mut tx, "test_domain")
+                .await
+                .unwrap();
+
+            assert_eq!(models.len(), 0);
+        }
+
+        {
+            let mut tx = pool.begin().await.unwrap();
+
+            let model_param = gen_test_model_parm("test_model", "test_domain");
+            model_insert(&mut tx, &model_param, "test").await.unwrap();
+
+            let model_param = gen_test_model_parm("test_model2", "test_domain");
+            model_insert(&mut tx, &model_param, "test").await.unwrap();
+
+            tx.commit().await.unwrap();
+        }
+
+        {
+            let mut tx = pool.begin().await.unwrap();
+            let models = model_select_by_domain(&mut tx, "test_domain")
+                .await
+                .unwrap();
+
+            assert_eq!(models.len(), 2);
+        }
+    }
+
+    /// Test model search
+    #[sqlx::test]
+    async fn test_model_search(pool: PgPool) {
+        {
+            let mut tx = pool.begin().await.unwrap();
+
+            let domain_param = gen_test_domain_parm("test_domain");
+            domain_insert(&mut tx, &domain_param, "test").await.unwrap();
+
+            let model_param = gen_test_model_parm("test_model", "test_domain");
+            model_insert(&mut tx, &model_param, "test").await.unwrap();
+
+            let model_param = gen_test_model_parm("test_model2", "test_domain");
+            model_insert(&mut tx, &model_param, "test").await.unwrap();
+
+            let domain_param = gen_test_domain_parm("foobar_domain");
+            domain_insert(&mut tx, &domain_param, "foobar")
+                .await
+                .unwrap();
+
+            let model_param = gen_test_model_parm("foobar_model", "foobar_domain");
+            model_insert(&mut tx, &model_param, "foobar").await.unwrap();
+
+            tx.commit().await.unwrap();
+        }
+
+        {
+            let mut tx = pool.begin().await.unwrap();
+            let models = model_select_search(&mut tx, &None, &None, &None, &None, &None, &None)
+                .await
+                .unwrap();
+
+            assert_eq!(models.len(), 3);
+            assert_eq!(models[0].name, "test_model");
+            assert_eq!(models[1].name, "test_model2");
+            assert_eq!(models[2].name, "foobar_model");
+        }
+
+        {
+            let mut tx = pool.begin().await.unwrap();
+            let models = model_select_search(
+                &mut tx,
+                &Some("abcdef".to_string()),
+                &None,
+                &None,
+                &None,
+                &None,
+                &None,
+            )
+            .await
+            .unwrap();
+
+            assert_eq!(models.len(), 0);
+        }
+
+        {
+            let mut tx = pool.begin().await.unwrap();
+            let models = model_select_search(
+                &mut tx,
+                &Some("model".to_string()),
+                &None,
+                &None,
+                &None,
+                &None,
+                &None,
+            )
+            .await
+            .unwrap();
+
+            assert_eq!(models.len(), 3);
+            assert_eq!(models[0].name, "test_model");
+            assert_eq!(models[1].name, "test_model2");
+            assert_eq!(models[2].name, "foobar_model");
+        }
+
+        {
+            let mut tx = pool.begin().await.unwrap();
+            let models = model_select_search(
+                &mut tx,
+                &Some("model2".to_string()),
+                &None,
+                &None,
+                &None,
+                &None,
+                &None,
+            )
+            .await
+            .unwrap();
+
+            assert_eq!(models.len(), 1);
+            assert_eq!(models[0].name, "test_model2");
+        }
+
+        {
+            let mut tx = pool.begin().await.unwrap();
+            let models = model_select_search(
+                &mut tx,
+                &None,
+                &Some("test".to_string()),
+                &None,
+                &None,
+                &None,
+                &None,
+            )
+            .await
+            .unwrap();
+
+            assert_eq!(models.len(), 2);
+            assert_eq!(models[0].name, "test_model");
+            assert_eq!(models[1].name, "test_model2");
+        }
+
+        {
+            let mut tx = pool.begin().await.unwrap();
+            let models = model_select_search(
+                &mut tx,
+                &None,
+                &None,
+                &Some("test_model%@test.com".to_string()),
+                &None,
+                &None,
+                &None,
+            )
+            .await
+            .unwrap();
+
+            assert_eq!(models.len(), 2);
+            assert_eq!(models[0].name, "test_model");
+            assert_eq!(models[1].name, "test_model2");
+        }
+
+        {
+            let mut tx = pool.begin().await.unwrap();
+            let models = model_select_search(
+                &mut tx,
+                &None,
+                &None,
+                &None,
+                &Some("abc".to_string()),
+                &None,
+                &None,
+            )
+            .await
+            .unwrap();
+
+            assert_eq!(models.len(), 3);
+            assert_eq!(models[0].name, "test_model");
+            assert_eq!(models[1].name, "test_model2");
+            assert_eq!(models[2].name, "foobar_model");
+        }
+
+        {
+            let mut tx = pool.begin().await.unwrap();
+            let models = model_select_search(&mut tx, &None, &None, &None, &None, &Some(1), &None)
+                .await
+                .unwrap();
+
+            assert_eq!(models.len(), 1);
+            assert_eq!(models[0].name, "test_model");
+        }
+
+        {
+            let mut tx = pool.begin().await.unwrap();
+            let models =
+                model_select_search(&mut tx, &None, &None, &None, &None, &Some(1), &Some(1))
+                    .await
+                    .unwrap();
+
+            assert_eq!(models.len(), 1);
+            assert_eq!(models[0].name, "test_model2");
+        }
+    }
+
+    /// Test model update
+    #[sqlx::test]
+    async fn test_model_update(pool: PgPool) {
+        {
+            let mut tx = pool.begin().await.unwrap();
+
+            let domain_param = gen_test_domain_parm("test_domain");
+            domain_insert(&mut tx, &domain_param, "test").await.unwrap();
+
+            let model_param = gen_test_model_parm("test_model", "test_domain");
+            model_insert(&mut tx, &model_param, "test").await.unwrap();
+
+            let domain_param = gen_test_domain_parm("foobar_domain");
+            domain_insert(&mut tx, &domain_param, "test").await.unwrap();
+
+            tx.commit().await.unwrap();
+        }
+
+        let model = {
+            let model_param = gen_test_model_parm("foobar_model", "foobar_domain");
+
+            let mut tx = pool.begin().await.unwrap();
+            model_update(&mut tx, "test_model", &model_param, "foobar")
+                .await
+                .unwrap()
+        };
+
+        assert_eq!(model.id, 1);
+        assert_eq!(model.name, "foobar_model");
+        assert_eq!(model.domain_id, 2);
+        assert_eq!(model.domain_name, "foobar_domain");
+        assert_eq!(model.owner, "foobar_model@test.com");
+        assert_eq!(
+            model.extra,
+            json!({
+                "abc": 123,
+                "def": [1, 2, 3],
+            }),
+        );
+        assert_eq!(model.created_by, "test");
+        assert_eq!(model.modified_by, "foobar");
+    }
+
+    /// Test model update where no domain or model found
+    #[sqlx::test]
+    async fn test_model_update_not_found(pool: PgPool) {
+        {
+            let domain_param = gen_test_domain_parm("test_domain");
+
+            let mut tx = pool.begin().await.unwrap();
+            domain_insert(&mut tx, &domain_param, "test").await.unwrap();
+
+            tx.commit().await.unwrap();
+        }
+
+        let err = {
+            let model_param = gen_test_model_parm("test_model", "test_domain");
+
+            let mut tx = pool.begin().await.unwrap();
+            model_update(&mut tx, "test_model", &model_param, "test")
+                .await
+                .unwrap_err()
+        };
+
+        match err {
+            sqlx::Error::RowNotFound => (),
+            err => panic!("Incorrect sqlx error type: {}", err),
+        };
+
+        {
+            let model_param = gen_test_model_parm("test_model", "test_domain");
+
+            let mut tx = pool.begin().await.unwrap();
+            model_insert(&mut tx, &model_param, "test").await.unwrap();
+
+            tx.commit().await.unwrap();
+        }
+
+        let err = {
+            let model_param = gen_test_model_parm("test_model", "foobar_domain");
+
+            let mut tx = pool.begin().await.unwrap();
+            model_update(&mut tx, "test_model", &model_param, "foobar")
+                .await
+                .unwrap_err()
+        };
+
+        match err {
+            sqlx::Error::RowNotFound => (),
+            err => panic!("Incorrect sqlx error type: {}", err),
+        };
+    }
+
+    /// Test model update with conflict
+    #[sqlx::test]
+    async fn test_model_update_conflict(pool: PgPool) {
+        {
+            let mut tx = pool.begin().await.unwrap();
+
+            let domain_param = gen_test_domain_parm("test_domain");
+            domain_insert(&mut tx, &domain_param, "test").await.unwrap();
+
+            let model_param = gen_test_model_parm("test_model", "test_domain");
+            model_insert(&mut tx, &model_param, "test").await.unwrap();
+
+            let model_param = gen_test_model_parm("foobar_model", "test_domain");
+            model_insert(&mut tx, &model_param, "foobar").await.unwrap();
+
+            tx.commit().await.unwrap();
+        }
+
+        let err = {
+            let model_param = gen_test_model_parm("foobar_model", "test_domain");
+
+            let mut tx = pool.begin().await.unwrap();
+            model_update(&mut tx, "test_model", &model_param, "foobar")
+                .await
+                .unwrap_err()
+        };
+
+        match err {
+            sqlx::Error::Database(err) => assert_eq!(
+                err.message().to_string(),
+                "duplicate key value violates unique constraint \"model_name_key\"",
+            ),
+            err => panic!("Incorrect sqlx error type: {}", err),
+        };
+    }
+
+    /// Test model drop
+    #[sqlx::test]
+    async fn test_model_drop(pool: PgPool) {
+        {
+            let mut tx = pool.begin().await.unwrap();
+
+            let domain_param = gen_test_domain_parm("test_domain");
+            domain_insert(&mut tx, &domain_param, "test").await.unwrap();
+
+            let model_param = gen_test_model_parm("test_model", "test_domain");
+            model_insert(&mut tx, &model_param, "test").await.unwrap();
+
+            tx.commit().await.unwrap();
+        }
+
+        let model = {
+            let mut tx = pool.begin().await.unwrap();
+            let model = model_drop(&mut tx, "test_model").await.unwrap();
+
+            tx.commit().await.unwrap();
+
+            model
+        };
+
+        assert_eq!(model.id, 1);
+        assert_eq!(model.name, "test_model");
+        assert_eq!(model.domain_id, 1);
+        assert_eq!(model.domain_name, "test_domain");
+        assert_eq!(model.owner, "test_model@test.com");
+        assert_eq!(
+            model.extra,
+            json!({
+                "abc": 123,
+                "def": [1, 2, 3],
+            }),
+        );
+        assert_eq!(model.created_by, "test");
+        assert_eq!(model.modified_by, "test");
+
+        let err = {
+            let mut tx = pool.begin().await.unwrap();
+            model_select(&mut tx, "test_domain").await.unwrap_err()
+        };
+
+        match err {
+            sqlx::Error::RowNotFound => (),
+            err => panic!("Incorrect sqlx error type: {}", err),
+        };
+    }
+
+    /// Test model drop if not exists
+    #[sqlx::test]
+    async fn test_model_drop_not_found(pool: PgPool) {
+        let err = {
+            let mut tx = pool.begin().await.unwrap();
+            model_drop(&mut tx, "test_model").await.unwrap_err()
+        };
+
+        match err {
+            sqlx::Error::RowNotFound => (),
+            err => panic!("Incorrect sqlx error type: {}", err),
+        };
+    }
+
+    /// Test model drop if children not droppped
+    #[sqlx::test]
+    async fn test_model_drop_conflict(pool: PgPool) {
+        {
+            let mut tx = pool.begin().await.unwrap();
+
+            let domain_param = gen_test_domain_parm("test_domain");
+            domain_insert(&mut tx, &domain_param, "test").await.unwrap();
+
+            let model_param = gen_test_model_parm("test_model", "test_domain");
+            model_insert(&mut tx, &model_param, "test").await.unwrap();
+
+            let field_param = gen_test_field_parm("test_field", "test_model");
+            field_insert(&mut tx, &field_param, "test").await.unwrap();
+
+            tx.commit().await.unwrap();
+        }
+
+        let err = {
+            let mut tx = pool.begin().await.unwrap();
+            model_drop(&mut tx, "test_model").await.unwrap_err()
+        };
+
+        match err {
+            sqlx::Error::Database(err) => assert_eq!(
+                err.message().to_string(),
+                "update or delete on table \"model\" violates foreign key constraint \"field_model_id_fkey\" on table \"field\"",
+            ),
+            err => panic!("Incorrect sqlx error type: {}", err),
+        };
+    }
+
+    /// Test create field
+    #[sqlx::test]
+    async fn test_field_insert(pool: PgPool) {
+        let field = {
+            let mut tx = pool.begin().await.unwrap();
+
+            let domain_param = gen_test_domain_parm("test_domain");
+            domain_insert(&mut tx, &domain_param, "test").await.unwrap();
+
+            let model_param = gen_test_model_parm("test_model", "test_domain");
+            model_insert(&mut tx, &model_param, "test").await.unwrap();
+
+            let field_param = gen_test_field_parm("test_field", "test_model");
+            let field = field_insert(&mut tx, &field_param, "test").await.unwrap();
+
+            tx.commit().await.unwrap();
+
+            field
+        };
+
+        assert_eq!(field.id, 1);
+        assert_eq!(field.name, "test_field");
+        assert_eq!(field.model_id, 1);
+        assert_eq!(field.model_name, "test_model");
+        assert_eq!(field.seq, Some(1));
+        assert_eq!(field.is_primary, false);
+        assert_eq!(field.data_type, DbxDataType::Decimal);
+        assert_eq!(field.is_nullable, true);
+        assert_eq!(field.precision, Some(8));
+        assert_eq!(field.scale, Some(2));
+        assert_eq!(
+            field.extra,
+            json!({
+                "abc": 123,
+                "def": [1, 2, 3],
+            }),
+        );
+        assert_eq!(field.created_by, "test");
+        assert_eq!(field.modified_by, "test");
+    }
+
+    /// Test field insert where no model found
+    #[sqlx::test]
+    async fn test_field_insert_not_found(pool: PgPool) {
+        let err = {
+            let field_param = gen_test_field_parm("test_field", "test_model");
+
+            let mut tx = pool.begin().await.unwrap();
+            field_insert(&mut tx, &field_param, "test")
+                .await
+                .unwrap_err()
+        };
+
+        match err {
+            sqlx::Error::RowNotFound => (),
+            err => panic!("Incorrect sqlx error type: {}", err),
+        };
+    }
+
+    /// Test double field create conflict
+    #[sqlx::test]
+    async fn test_field_insert_conflict(pool: PgPool) {
+        let field_param = gen_test_field_parm("test_field", "test_model");
+
+        {
+            let mut tx = pool.begin().await.unwrap();
+
+            let domain_param = gen_test_domain_parm("test_domain");
+            domain_insert(&mut tx, &domain_param, "test").await.unwrap();
+
+            let model_param = gen_test_model_parm("test_model", "test_domain");
+            model_insert(&mut tx, &model_param, "test").await.unwrap();
+
+            field_insert(&mut tx, &field_param, "test").await.unwrap();
+
+            tx.commit().await.unwrap();
+        }
+
+        let err = {
+            let mut tx = pool.begin().await.unwrap();
+            field_insert(&mut tx, &field_param, "test")
+                .await
+                .unwrap_err()
+        };
+
+        match err {
+            sqlx::Error::Database(err) => assert_eq!(
+                err.message().to_string(),
+                "duplicate key value violates unique constraint \"field_model_id_name_key\"",
+            ),
+            err => panic!("Incorrect sqlx error type: {}", err),
+        };
+    }
+
+    /// Test field select
+    #[sqlx::test]
+    async fn test_field_select(pool: PgPool) {
+        {
+            let mut tx = pool.begin().await.unwrap();
+
+            let domain_param = gen_test_domain_parm("test_domain");
+            domain_insert(&mut tx, &domain_param, "test").await.unwrap();
+
+            let model_param = gen_test_model_parm("test_model", "test_domain");
+            model_insert(&mut tx, &model_param, "test").await.unwrap();
+
+            let field_param = gen_test_field_parm("test_field", "test_model");
+            field_insert(&mut tx, &field_param, "test").await.unwrap();
+
+            tx.commit().await.unwrap();
+        }
+
+        let field = {
+            let mut tx = pool.begin().await.unwrap();
+            field_select(&mut tx, "test_model", "test_field")
+                .await
+                .unwrap()
+        };
+
+        assert_eq!(field.id, 1);
+        assert_eq!(field.name, "test_field");
+        assert_eq!(field.model_id, 1);
+        assert_eq!(field.model_name, "test_model");
+        assert_eq!(field.seq, Some(1));
+        assert_eq!(field.is_primary, false);
+        assert_eq!(field.data_type, DbxDataType::Decimal);
+        assert_eq!(field.is_nullable, true);
+        assert_eq!(field.precision, Some(8));
+        assert_eq!(field.scale, Some(2));
+        assert_eq!(
+            field.extra,
+            json!({
+                "abc": 123,
+                "def": [1, 2, 3],
+            }),
+        );
+        assert_eq!(field.created_by, "test");
+        assert_eq!(field.modified_by, "test");
+    }
+
+    /// Test Reading a field that does not exists
+    #[sqlx::test]
+    async fn test_field_select_not_found(pool: PgPool) {
+        let err = {
+            let mut tx = pool.begin().await.unwrap();
+            field_select(&mut tx, "test_field", "test_model")
+                .await
+                .unwrap_err()
+        };
+
+        match err {
+            sqlx::Error::RowNotFound => (),
+            err => panic!("Incorrect sqlx error type: {}", err),
+        };
+    }
+
+    /// Test field select by model
+    #[sqlx::test]
+    async fn test_field_select_by_model(pool: PgPool) {
+        {
+            let mut tx = pool.begin().await.unwrap();
+            let fields = field_select_by_model(&mut tx, "test_model").await.unwrap();
+
+            assert_eq!(fields.len(), 0);
+        }
+
+        {
+            let mut tx = pool.begin().await.unwrap();
+
+            let domain_param = gen_test_domain_parm("test_domain");
+            domain_insert(&mut tx, &domain_param, "test").await.unwrap();
+
+            let model_param = gen_test_model_parm("test_model", "test_domain");
+            model_insert(&mut tx, &model_param, "test").await.unwrap();
+
+            tx.commit().await.unwrap();
+        }
+
+        {
+            let mut tx = pool.begin().await.unwrap();
+            let fields = field_select_by_model(&mut tx, "test_model").await.unwrap();
+
+            assert_eq!(fields.len(), 0);
+        }
+
+        {
+            let mut tx = pool.begin().await.unwrap();
+
+            let field_param = gen_test_field_parm("test_field", "test_model");
+            field_insert(&mut tx, &field_param, "test").await.unwrap();
+
+            let field_param = gen_test_field_parm("test_field2", "test_model");
+            field_insert(&mut tx, &field_param, "test").await.unwrap();
+
+            tx.commit().await.unwrap();
+        }
+
+        {
+            let mut tx = pool.begin().await.unwrap();
+            let fields = field_select_by_model(&mut tx, "test_model").await.unwrap();
+
+            assert_eq!(fields.len(), 2);
+        }
+    }
+
+    /// Test field update
+    #[sqlx::test]
+    async fn test_field_update(pool: PgPool) {
+        {
+            let mut tx = pool.begin().await.unwrap();
+
+            let domain_param = gen_test_domain_parm("test_domain");
+            domain_insert(&mut tx, &domain_param, "test").await.unwrap();
+
+            let model_param = gen_test_model_parm("test_model", "test_domain");
+            model_insert(&mut tx, &model_param, "test").await.unwrap();
+
+            let field_param = gen_test_field_parm("test_field", "test_model");
+            field_insert(&mut tx, &field_param, "test").await.unwrap();
+
+            let domain_param = gen_test_domain_parm("foobar_domain");
+            domain_insert(&mut tx, &domain_param, "foobar")
+                .await
+                .unwrap();
+
+            let model_param = gen_test_model_parm("foobar_model", "foobar_domain");
+            model_insert(&mut tx, &model_param, "foobar").await.unwrap();
+
+            tx.commit().await.unwrap();
+        }
+
+        let field = {
+            let field_param = gen_test_field_parm("foobar_field", "test_model");
+
+            let mut tx = pool.begin().await.unwrap();
+            field_update(
+                &mut tx,
+                "test_model",
+                "test_field",
+                &field_param.into_update(),
+                "foobar",
+            )
+            .await
+            .unwrap()
+        };
+
+        assert_eq!(field.id, 1);
+        assert_eq!(field.name, "foobar_field");
+        assert_eq!(field.model_id, 1);
+        assert_eq!(field.model_name, "test_model");
+        assert_eq!(field.seq, Some(1));
+        assert_eq!(field.is_primary, false);
+        assert_eq!(field.data_type, DbxDataType::Decimal);
+        assert_eq!(field.is_nullable, true);
+        assert_eq!(field.precision, Some(8));
+        assert_eq!(field.scale, Some(2));
+        assert_eq!(
+            field.extra,
+            json!({
+                "abc": 123,
+                "def": [1, 2, 3],
+            }),
+        );
+        assert_eq!(field.created_by, "test");
+        assert_eq!(field.modified_by, "foobar");
+    }
+
+    /// Test field update where no field or model found
+    #[sqlx::test]
+    async fn test_field_update_not_found(pool: PgPool) {
+        let err = {
+            let field_param = gen_test_field_parm("test_field", "test_model");
+
+            let mut tx = pool.begin().await.unwrap();
+            field_update(
+                &mut tx,
+                "test_model",
+                "test_field",
+                &field_param.into_update(),
+                "test",
+            )
+            .await
+            .unwrap_err()
+        };
+
+        match err {
+            sqlx::Error::RowNotFound => (),
+            err => panic!("Incorrect sqlx error type: {}", err),
+        };
+
+        {
+            let mut tx = pool.begin().await.unwrap();
+
+            let domain_param = gen_test_domain_parm("test_domain");
+            domain_insert(&mut tx, &domain_param, "test").await.unwrap();
+
+            let model_param = gen_test_model_parm("test_model", "test_domain");
+            model_insert(&mut tx, &model_param, "test").await.unwrap();
+
+            tx.commit().await.unwrap();
+        }
+
+        let err = {
+            let field_param = gen_test_field_parm("foobar_field", "test_model");
+
+            let mut tx = pool.begin().await.unwrap();
+            field_update(
+                &mut tx,
+                "test_model",
+                "test_field",
+                &field_param.into_update(),
+                "foobar",
+            )
+            .await
+            .unwrap_err()
+        };
+
+        match err {
+            sqlx::Error::RowNotFound => (),
+            err => panic!("Incorrect sqlx error type: {}", err),
+        };
+    }
+
+    /// Test field update with conflict
+    #[sqlx::test]
+    async fn test_field_update_conflict(pool: PgPool) {
+        {
+            let mut tx = pool.begin().await.unwrap();
+
+            let domain_param = gen_test_domain_parm("test_domain");
+            domain_insert(&mut tx, &domain_param, "test").await.unwrap();
+
+            let model_param = gen_test_model_parm("test_model", "test_domain");
+            model_insert(&mut tx, &model_param, "test").await.unwrap();
+
+            let field_param = gen_test_field_parm("test_field", "test_model");
+            field_insert(&mut tx, &field_param, "test").await.unwrap();
+
+            let field_param = gen_test_field_parm("foobar_field", "test_model");
+            field_insert(&mut tx, &field_param, "test").await.unwrap();
+
+            tx.commit().await.unwrap();
+        }
+
+        let err = {
+            let mut tx = pool.begin().await.unwrap();
+
+            let field_param = gen_test_field_parm("foobar_field", "test_model");
+            field_update(
+                &mut tx,
+                "test_model",
+                "test_field",
+                &field_param.into_update(),
+                "foobar",
+            )
+            .await
+            .unwrap_err()
+        };
+
+        match err {
+            sqlx::Error::Database(err) => assert_eq!(
+                err.message().to_string(),
+                "duplicate key value violates unique constraint \"field_model_id_name_key\"",
+            ),
+            err => panic!("Incorrect sqlx error type: {}", err),
+        };
+    }
+
+    /// Test field drop
+    #[sqlx::test]
+    async fn test_field_drop(pool: PgPool) {
+        {
+            let mut tx = pool.begin().await.unwrap();
+
+            let domain_param = gen_test_domain_parm("test_domain");
+            domain_insert(&mut tx, &domain_param, "test").await.unwrap();
+
+            let model_param = gen_test_model_parm("test_model", "test_domain");
+            model_insert(&mut tx, &model_param, "test").await.unwrap();
+
+            let field_param = gen_test_field_parm("test_field", "test_model");
+            field_insert(&mut tx, &field_param, "test").await.unwrap();
+
+            tx.commit().await.unwrap();
+        }
+
+        let field = {
+            let mut tx = pool.begin().await.unwrap();
+            let field = field_drop(&mut tx, "test_model", "test_field")
+                .await
+                .unwrap();
+
+            tx.commit().await.unwrap();
+
+            field
+        };
+
+        assert_eq!(field.id, 1);
+        assert_eq!(field.name, "test_field");
+        assert_eq!(field.model_id, 1);
+        assert_eq!(field.model_name, "test_model");
+        assert_eq!(field.seq, Some(1));
+        assert_eq!(field.is_primary, false);
+        assert_eq!(field.data_type, DbxDataType::Decimal);
+        assert_eq!(field.is_nullable, true);
+        assert_eq!(field.precision, Some(8));
+        assert_eq!(field.scale, Some(2));
+        assert_eq!(
+            field.extra,
+            json!({
+                "abc": 123,
+                "def": [1, 2, 3],
+            }),
+        );
+        assert_eq!(field.created_by, "test");
+        assert_eq!(field.modified_by, "test");
+
+        let err = {
+            let mut tx = pool.begin().await.unwrap();
+            field_select(&mut tx, "test_model", "test_field")
+                .await
+                .unwrap_err()
+        };
+
+        match err {
+            sqlx::Error::RowNotFound => (),
+            err => panic!("Incorrect sqlx error type: {}", err),
+        };
+    }
+
+    /// Test field drop if not exists
+    #[sqlx::test]
+    async fn test_field_drop_not_found(pool: PgPool) {
+        let err = {
+            let mut tx = pool.begin().await.unwrap();
+            field_drop(&mut tx, "test_model", "test_field")
+                .await
+                .unwrap_err()
+        };
+
+        match err {
+            sqlx::Error::RowNotFound => (),
+            err => panic!("Incorrect sqlx error type: {}", err),
+        };
+    }
+
+    /// Test field drop by model
+    #[sqlx::test]
+    async fn test_field_drop_by_model(pool: PgPool) {
+        {
+            let mut tx = pool.begin().await.unwrap();
+
+            let domain_param = gen_test_domain_parm("test_domain");
+            domain_insert(&mut tx, &domain_param, "test").await.unwrap();
+
+            let model_param = gen_test_model_parm("test_model", "test_domain");
+            model_insert(&mut tx, &model_param, "test").await.unwrap();
+
+            let field_param = gen_test_field_parm("test_field", "test_model");
+            field_insert(&mut tx, &field_param, "test").await.unwrap();
+
+            let field_param = gen_test_field_parm("test_field2", "test_model");
+            field_insert(&mut tx, &field_param, "test").await.unwrap();
+
+            tx.commit().await.unwrap();
+        }
+
+        let fields = {
+            let mut tx = pool.begin().await.unwrap();
+            let fields = field_drop_by_model(&mut tx, "test_model").await.unwrap();
+
+            tx.commit().await.unwrap();
+
+            fields
+        };
+
+        assert_eq!(fields.len(), 2);
+
+        let err = {
+            let mut tx = pool.begin().await.unwrap();
+            field_select(&mut tx, "test_model", "test_field")
+                .await
+                .unwrap_err()
+        };
+
+        match err {
+            sqlx::Error::RowNotFound => (),
+            err => panic!("Incorrect sqlx error type: {}", err),
+        };
+    }
+}
