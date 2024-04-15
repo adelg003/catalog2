@@ -779,7 +779,7 @@ mod tests {
 
     impl FieldParam {
         /// Turn FieldParam into FieldParamUpdate
-        fn into_update(self) -> FieldParamUpdate {
+        pub fn into_update(self) -> FieldParamUpdate {
             FieldParamUpdate {
                 name: self.name,
                 is_primary: self.is_primary,
