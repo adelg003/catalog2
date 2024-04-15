@@ -17,7 +17,7 @@ pub struct UserCred {
 }
 
 /// Struct to return when authenticating
-#[derive(Debug, Object)]
+#[derive(Debug, Object, PartialEq)]
 struct User {
     username: String,
 }
@@ -142,4 +142,172 @@ impl Auth for TokenOrBasicAuth {
     }
 }
 
-//TODO Add Unit Test
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    /// Test creating a JWT
+    #[test]
+    fn test_make_jwt() {
+        let jwt_key =
+            b"N9&YMUGmNpP@dy$At6jv$CEoXRA5hEgNy%C3n4mVKQpDkJoFMZ5VxK#&e&7xrYrC5$nai73GE!dGKqxc";
+
+        let encoding_key = EncodingKey::from_secret(jwt_key);
+        let decoding_key = DecodingKey::from_secret(jwt_key);
+
+        // Make JWT
+        let token = make_jwt("test_user", &encoding_key).unwrap();
+
+        // Validate JWT
+        decode::<Claim>(&token, &decoding_key, &Validation::default()).unwrap();
+    }
+
+    /// Test Baic Auth Checker
+    #[tokio::test]
+    async fn test_basic_checker() {
+        let user_creds = vec![UserCred {
+            username: "admin".to_string(),
+            hash: "$2b$12$QkHm2JiQg3WILPe0l/8Vqun7UVLqfSBLAzXiKbffGhs11RSqH7bjS".to_string(),
+        }];
+
+        let req = Request::builder().extension(user_creds).finish();
+        let basic = Basic {
+            username: "admin".to_string(),
+            password: "abc123".to_string(),
+        };
+
+        let checked = basic_checker(&req, basic).await;
+
+        assert_eq!(
+            checked,
+            Some(User {
+                username: "admin".to_string()
+            }),
+        );
+    }
+
+    /// Test Baic Auth Checker with bad password
+    #[tokio::test]
+    async fn test_basic_checker_bad_password() {
+        let user_creds = vec![UserCred {
+            username: "admin".to_string(),
+            hash: "$2b$12$QkHm2JiQg3WILPe0l/8Vqun7UVLqfSBLAzXiKbffGhs11RSqH7bjS".to_string(),
+        }];
+
+        let req = Request::builder().extension(user_creds).finish();
+
+        let basic = Basic {
+            username: "admin".to_string(),
+            password: "wrong_password".to_string(),
+        };
+
+        let checked = basic_checker(&req, basic).await;
+
+        assert_eq!(checked, None);
+    }
+
+    /// Test Baic Auth Checker with bad user
+    #[tokio::test]
+    async fn test_basic_checker_bad_user() {
+        let user_creds = vec![UserCred {
+            username: "admin".to_string(),
+            hash: "$2b$12$QkHm2JiQg3WILPe0l/8Vqun7UVLqfSBLAzXiKbffGhs11RSqH7bjS".to_string(),
+        }];
+
+        let req = Request::builder().extension(user_creds).finish();
+        let basic = Basic {
+            username: "bad_user".to_string(),
+            password: "abc123".to_string(),
+        };
+
+        let checked = basic_checker(&req, basic).await;
+
+        assert_eq!(checked, None);
+    }
+
+    /// Test Token Auth Checker
+    #[tokio::test]
+    async fn test_token_checker() {
+        let user_creds = vec![UserCred {
+            username: "admin".to_string(),
+            hash: "$2b$12$QkHm2JiQg3WILPe0l/8Vqun7UVLqfSBLAzXiKbffGhs11RSqH7bjS".to_string(),
+        }];
+
+        let jwt_key =
+            b"N9&YMUGmNpP@dy$At6jv$CEoXRA5hEgNy%C3n4mVKQpDkJoFMZ5VxK#&e&7xrYrC5$nai73GE!dGKqxc";
+
+        let encoding_key = EncodingKey::from_secret(jwt_key);
+        let decoding_key = DecodingKey::from_secret(jwt_key);
+
+        let req = Request::builder()
+            .extension(user_creds)
+            .extension(decoding_key)
+            .finish();
+
+        let api_key = ApiKey {
+            key: make_jwt("admin", &encoding_key).unwrap(),
+        };
+
+        let checked = token_checker(&req, api_key).await;
+
+        assert_eq!(
+            checked,
+            Some(User {
+                username: "admin".to_string()
+            }),
+        );
+    }
+
+    /// Test Token Auth Checker with bad token
+    #[tokio::test]
+    async fn test_token_checker_bad_token() {
+        let user_creds = vec![UserCred {
+            username: "admin".to_string(),
+            hash: "$2b$12$QkHm2JiQg3WILPe0l/8Vqun7UVLqfSBLAzXiKbffGhs11RSqH7bjS".to_string(),
+        }];
+
+        let jwt_key =
+            b"N9&YMUGmNpP@dy$At6jv$CEoXRA5hEgNy%C3n4mVKQpDkJoFMZ5VxK#&e&7xrYrC5$nai73GE!dGKqxc";
+
+        let decoding_key = DecodingKey::from_secret(jwt_key);
+
+        let req = Request::builder()
+            .extension(user_creds)
+            .extension(decoding_key)
+            .finish();
+
+        let api_key = ApiKey {
+            key: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c".to_string(),
+        };
+
+        let checked = token_checker(&req, api_key).await;
+
+        assert_eq!(checked, None);
+    }
+
+    /// Test Token Auth Checker with bad user
+    #[tokio::test]
+    async fn test_token_checker_bad_user() {
+        let user_creds = Vec::<UserCred>::new();
+
+        let jwt_key =
+            b"N9&YMUGmNpP@dy$At6jv$CEoXRA5hEgNy%C3n4mVKQpDkJoFMZ5VxK#&e&7xrYrC5$nai73GE!dGKqxc";
+
+        let encoding_key = EncodingKey::from_secret(jwt_key);
+        let decoding_key = DecodingKey::from_secret(jwt_key);
+
+        let req = Request::builder()
+            .extension(user_creds)
+            .extension(decoding_key)
+            .finish();
+
+        let api_key = ApiKey {
+            key: make_jwt("admin", &encoding_key).unwrap(),
+        };
+
+        let checked = token_checker(&req, api_key).await;
+
+        assert_eq!(checked, None);
+    }
+}

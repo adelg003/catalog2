@@ -730,8 +730,6 @@ pub async fn field_drop_by_model(
 
 #[cfg(test)]
 mod tests {
-    use core::panic;
-
     use super::*;
     use pretty_assertions::assert_eq;
     use serde_json::json;
