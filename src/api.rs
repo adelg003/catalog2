@@ -1092,5 +1092,160 @@ mod tests {
             .assert_text("update or delete on table \"domain\" violates foreign key constraint \"model_domain_id_fkey\" on table \"model\"")
             .await;
     }
+
+    /// Test Reading domain with models
+    #[sqlx::test]
+    async fn test_domain_get_with_models(pool: PgPool) {
+        // Test JWT keys and User Creds
+        let (encoding_key, decoding_key) = gen_test_encode_decode_tokens();
+        let user_creds = gen_test_user_creds("test_user");
+
+        // Test JWT
+        let token = make_jwt("test_user", &encoding_key).unwrap();
+
+        // Test Client
+        let ep = OpenApiService::new(Api, "test", "1.0");
+        let cli = TestClient::new(ep);
+
+        // Create prior records
+        {
+            let mut tx = pool.begin().await.unwrap();
+
+            let domain_param = gen_test_domain_parm("test_domain");
+            domain_add(&mut tx, &domain_param, "test_user")
+                .await
+                .unwrap();
+
+            let model_param = gen_test_model_parm("test_model1", "test_domain");
+            model_add(&mut tx, &model_param, "test_user").await.unwrap();
+
+            let model_param = gen_test_model_parm("test_model2", "test_domain");
+            model_add(&mut tx, &model_param, "test_user").await.unwrap();
+
+            tx.commit().await.unwrap();
+        }
+
+        // Get existing record
+        let response = cli
+            .get("/domain_with_models/test_domain")
+            .header("X-API-Key", &token)
+            .header("Content-Type", "application/json; charset=utf-8")
+            .data(decoding_key)
+            .data(user_creds)
+            .data(pool)
+            .send()
+            .await;
+
+        // Check status
+        response.assert_status_is_ok();
+
+        // Check Values
+        let test_json = response.json().await;
+        let json_value = test_json.value();
+
+        let domain_json = json_value.object().get("domain");
+        let model1_json = json_value.object().get("models").array().get(0);
+        let model2_json = json_value.object().get("models").array().get(1);
+
+        domain_json.object().get("id").assert_i64(1);
+        domain_json
+            .object()
+            .get("name")
+            .assert_string("test_domain");
+        domain_json
+            .object()
+            .get("owner")
+            .assert_string("test_domain@test.com");
+        domain_json
+            .object()
+            .get("extra")
+            .object()
+            .get("abc")
+            .assert_i64(123);
+        domain_json
+            .object()
+            .get("extra")
+            .object()
+            .get("def")
+            .assert_i64_array(&[1, 2, 3]);
+        domain_json
+            .object()
+            .get("created_by")
+            .assert_string("test_user");
+        domain_json
+            .object()
+            .get("modified_by")
+            .assert_string("test_user");
+
+        model1_json.object().get("id").assert_i64(1);
+        model1_json
+            .object()
+            .get("name")
+            .assert_string("test_model1");
+        model1_json.object().get("domain_id").assert_i64(1);
+        model1_json
+            .object()
+            .get("domain_name")
+            .assert_string("test_domain");
+        model1_json
+            .object()
+            .get("owner")
+            .assert_string("test_model1@test.com");
+        model1_json
+            .object()
+            .get("extra")
+            .object()
+            .get("abc")
+            .assert_i64(123);
+        model1_json
+            .object()
+            .get("extra")
+            .object()
+            .get("def")
+            .assert_i64_array(&[1, 2, 3]);
+        model1_json
+            .object()
+            .get("created_by")
+            .assert_string("test_user");
+        model1_json
+            .object()
+            .get("modified_by")
+            .assert_string("test_user");
+
+        model2_json.object().get("id").assert_i64(2);
+        model2_json
+            .object()
+            .get("name")
+            .assert_string("test_model2");
+        model2_json.object().get("domain_id").assert_i64(1);
+        model2_json
+            .object()
+            .get("domain_name")
+            .assert_string("test_domain");
+        model2_json
+            .object()
+            .get("owner")
+            .assert_string("test_model2@test.com");
+        model2_json
+            .object()
+            .get("extra")
+            .object()
+            .get("abc")
+            .assert_i64(123);
+        model2_json
+            .object()
+            .get("extra")
+            .object()
+            .get("def")
+            .assert_i64_array(&[1, 2, 3]);
+        model2_json
+            .object()
+            .get("created_by")
+            .assert_string("test_user");
+        model2_json
+            .object()
+            .get("modified_by")
+            .assert_string("test_user");
+    }
 }
 //TODO Add integration test
