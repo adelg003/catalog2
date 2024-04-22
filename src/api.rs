@@ -1,5 +1,5 @@
 use crate::{
-    auth::{make_jwt, Auth, TokenAuth, TokenOrBasicAuth},
+    auth::{Auth, TokenAuth},
     core::{
         domain_add, domain_edit, domain_read, domain_read_search, domain_read_with_models,
         domain_remove, field_add, field_edit, field_read, field_remove, model_add,
@@ -9,17 +9,16 @@ use crate::{
         ModelSearch,
     },
 };
-use jsonwebtoken::EncodingKey;
 use poem::{error::InternalServerError, web::Data};
 use poem_openapi::{
     param::{Path, Query},
-    payload::{Json, PlainText},
+    payload::Json,
     OpenApi, Tags,
 };
 use sqlx::PgPool;
 
 #[derive(Tags)]
-enum Tag {
+pub enum Tag {
     Auth,
     //TODO Component,
     Domain,
@@ -37,22 +36,6 @@ pub struct Api;
 
 #[OpenApi]
 impl Api {
-    /// Generate a fresh JWT
-    #[oai(path = "/gen_token", method = "post", tag = Tag::Auth)]
-    async fn gen_token(
-        &self,
-        auth: TokenOrBasicAuth,
-        Data(encoding_key): Data<&EncodingKey>,
-    ) -> Result<PlainText<String>, poem::Error> {
-        // Get user from authentication.
-        let username = auth.username();
-
-        // Get JWT
-        let token = make_jwt(username, encoding_key).map_err(InternalServerError)?;
-
-        Ok(PlainText(token))
-    }
-
     /// Add a domain to the domain table
     #[oai(path = "/domain", method = "post", tag = Tag::Domain)]
     async fn domain_post(
@@ -429,16 +412,25 @@ impl Api {
 }
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
     use super::*;
-    use crate::auth::UserCred;
-    use jsonwebtoken::DecodingKey;
+    use crate::auth::{AuthApi, UserCred};
+    use jsonwebtoken::{DecodingKey, EncodingKey};
     use poem::{http::StatusCode, test::TestClient, web::headers::Authorization};
     use poem_openapi::OpenApiService;
     use serde_json::json;
 
-    /// Create the JWT tokens
-    fn gen_test_encode_decode_tokens() -> (EncodingKey, DecodingKey) {
+    /// Create test users creds
+    pub fn gen_test_user_creds(user: &str) -> Vec<UserCred> {
+        // Test user Cred
+        vec![UserCred {
+            username: user.to_string(),
+            hash: "$2b$12$QkHm2JiQg3WILPe0l/8Vqun7UVLqfSBLAzXiKbffGhs11RSqH7bjS".to_string(),
+        }]
+    }
+
+    /// Create Encode and Decode Keys
+    pub fn gen_encode_decode_token() -> (EncodingKey, DecodingKey) {
         // Test JWT secert and keys
         let jwt_key =
             b"N9&YMUGmNpP@dy$At6jv$CEoXRA5hEgNy%C3n4mVKQpDkJoFMZ5VxK#&e&7xrYrC5$nai73GE!dGKqxc";
@@ -448,13 +440,31 @@ mod tests {
         (encoding_key, decoding_key)
     }
 
-    /// Create test users creds
-    fn gen_test_user_creds(user: &str) -> Vec<UserCred> {
-        // Test user Cred
-        vec![UserCred {
-            username: user.to_string(),
-            hash: "$2b$12$QkHm2JiQg3WILPe0l/8Vqun7UVLqfSBLAzXiKbffGhs11RSqH7bjS".to_string(),
-        }]
+    /// Create the JWT, encode key, and decode key tokens
+    pub async fn gen_jwt_encode_decode_token(
+        user_creds: &[UserCred],
+    ) -> (String, EncodingKey, DecodingKey) {
+        // Test JWT secert and keys
+        let (encoding_key, decoding_key) = gen_encode_decode_token();
+
+        // Test Client
+        let ep = OpenApiService::new(AuthApi, "test", "1.0");
+        let cli = TestClient::new(ep);
+
+        // Get JWT
+        let response = cli
+            .post("/gen_token")
+            .typed_header(Authorization::basic("test_user", "abc123"))
+            .data(encoding_key.clone())
+            .data(user_creds.to_vec())
+            .send()
+            .await;
+
+        response.assert_status_is_ok();
+
+        let token = response.0.into_body().into_string().await.unwrap();
+
+        (token, encoding_key, decoding_key)
     }
 
     /// Create test domain
@@ -482,116 +492,12 @@ mod tests {
         }
     }
 
-    /// Test creating a token
-    #[tokio::test]
-    async fn test_get_token_auth_basic() {
-        // Test JWT keys and User Creds
-        let (encoding_key, _) = gen_test_encode_decode_tokens();
-        let user_creds = gen_test_user_creds("test_user");
-
-        // Test Client
-        let ep = OpenApiService::new(Api, "test", "1.0");
-        let cli = TestClient::new(ep);
-
-        // Test Request
-        let response = cli
-            .post("/gen_token")
-            .typed_header(Authorization::basic("test_user", "abc123"))
-            .data(encoding_key)
-            .data(user_creds)
-            .send()
-            .await;
-
-        // Check status and Value
-        response.assert_status_is_ok();
-    }
-
-    /// Test bad request for creating a token
-    #[tokio::test]
-    async fn test_get_token_auth_basic_bad() {
-        // Test JWT keys and User Creds
-        let (encoding_key, _) = gen_test_encode_decode_tokens();
-        let user_creds = gen_test_user_creds("test_user");
-
-        // Test Client
-        let ep = OpenApiService::new(Api, "test", "1.0");
-        let cli = TestClient::new(ep);
-
-        // Test Request
-        let response = cli
-            .post("/gen_token")
-            .typed_header(Authorization::basic("test_user", "bad_password"))
-            .data(encoding_key)
-            .data(user_creds)
-            .send()
-            .await;
-
-        // Check status and Value
-        response.assert_status(StatusCode::UNAUTHORIZED);
-    }
-
-    /// Test creating a token
-    #[tokio::test]
-    async fn test_get_token_auth_token() {
-        // Test JWT keys and User Creds
-        let (encoding_key, decoding_key) = gen_test_encode_decode_tokens();
-        let user_creds = gen_test_user_creds("test_user");
-
-        // Test JWT
-        let token = make_jwt("test_user", &encoding_key).unwrap();
-
-        // Test Client
-        let ep = OpenApiService::new(Api, "test", "1.0");
-        let cli = TestClient::new(ep);
-
-        // Test Request
-        let response = cli
-            .post("/gen_token")
-            .header("X-API-Key", &token)
-            .data(encoding_key)
-            .data(decoding_key)
-            .data(user_creds)
-            .send()
-            .await;
-
-        // Check status and Value
-        response.assert_status_is_ok();
-    }
-
-    /// Test bad request for creating a token
-    #[tokio::test]
-    async fn test_get_token_auth_token_bad() {
-        // Test JWT keys and User Creds
-        let (encoding_key, decoding_key) = gen_test_encode_decode_tokens();
-        let user_creds = gen_test_user_creds("test_user");
-
-        // Test Client
-        let ep = OpenApiService::new(Api, "test", "1.0");
-        let cli = TestClient::new(ep);
-
-        // Test Request
-        let response = cli
-            .post("/gen_token")
-            .header("X-API-Key", "bad_token")
-            .data(encoding_key)
-            .data(decoding_key)
-            .data(user_creds)
-            .send()
-            .await;
-
-        // Check status and Value
-        response.assert_status(StatusCode::UNAUTHORIZED);
-    }
-
     /// Test create domain
     #[sqlx::test]
     async fn test_domain_post(pool: PgPool) {
         // Test JWT keys and User Creds
-        let (encoding_key, decoding_key) = gen_test_encode_decode_tokens();
         let user_creds = gen_test_user_creds("test_user");
-
-        // Test JWT
-        let token = make_jwt("test_user", &encoding_key).unwrap();
+        let (token, _, decoding_key) = gen_jwt_encode_decode_token(&user_creds).await;
 
         // Payload to send into the API
         let domain_param = gen_test_domain_parm("test_domain");
@@ -652,11 +558,8 @@ mod tests {
     #[sqlx::test]
     async fn test_domain_post_conflict(pool: PgPool) {
         // Test JWT keys and User Creds
-        let (encoding_key, decoding_key) = gen_test_encode_decode_tokens();
         let user_creds = gen_test_user_creds("test_user");
-
-        // Test JWT
-        let token = make_jwt("test_user", &encoding_key).unwrap();
+        let (token, _, decoding_key) = gen_jwt_encode_decode_token(&user_creds).await;
 
         // Payload to send into the API
         let domain_param = gen_test_domain_parm("test_domain");
@@ -782,11 +685,8 @@ mod tests {
     #[sqlx::test]
     async fn test_domain_put(pool: PgPool) {
         // Test JWT keys and User Creds
-        let (encoding_key, decoding_key) = gen_test_encode_decode_tokens();
-        let user_creds = gen_test_user_creds("foobar_user");
-
-        // Test JWT
-        let token = make_jwt("foobar_user", &encoding_key).unwrap();
+        let user_creds = gen_test_user_creds("test_user");
+        let (token, _, decoding_key) = gen_jwt_encode_decode_token(&user_creds).await;
 
         // Payload to send into the API
         let domain_param = gen_test_domain_parm("test_domain");
@@ -854,18 +754,15 @@ mod tests {
         json_value
             .object()
             .get("modified_by")
-            .assert_string("foobar_user");
+            .assert_string("test_user");
     }
 
     /// Test domain update where no domain found
     #[sqlx::test]
     async fn test_domain_put_not_found(pool: PgPool) {
         // Test JWT keys and User Creds
-        let (encoding_key, decoding_key) = gen_test_encode_decode_tokens();
-        let user_creds = gen_test_user_creds("foobar_user");
-
-        // Test JWT
-        let token = make_jwt("foobar_user", &encoding_key).unwrap();
+        let user_creds = gen_test_user_creds("test_user");
+        let (token, _, decoding_key) = gen_jwt_encode_decode_token(&user_creds).await;
 
         // Payload to send into the API
         let domain_param = gen_test_domain_parm("test_domain");
@@ -896,11 +793,8 @@ mod tests {
     #[sqlx::test]
     async fn test_domain_put_conflict(pool: PgPool) {
         // Test JWT keys and User Creds
-        let (encoding_key, decoding_key) = gen_test_encode_decode_tokens();
-        let user_creds = gen_test_user_creds("foobar_user");
-
-        // Test JWT
-        let token = make_jwt("foobar_user", &encoding_key).unwrap();
+        let user_creds = gen_test_user_creds("test_user");
+        let (token, _, decoding_key) = gen_jwt_encode_decode_token(&user_creds).await;
 
         // Payload to send into the API
         let domain_param = gen_test_domain_parm("test_domain");
@@ -949,11 +843,8 @@ mod tests {
     #[sqlx::test]
     async fn test_domain_delete(pool: PgPool) {
         // Test JWT keys and User Creds
-        let (encoding_key, decoding_key) = gen_test_encode_decode_tokens();
-        let user_creds = gen_test_user_creds("foobar_user");
-
-        // Test JWT
-        let token = make_jwt("foobar_user", &encoding_key).unwrap();
+        let user_creds = gen_test_user_creds("test_user");
+        let (token, _, decoding_key) = gen_jwt_encode_decode_token(&user_creds).await;
 
         // Payload to send into the API
         let domain_param = gen_test_domain_parm("test_domain");
@@ -1021,11 +912,8 @@ mod tests {
     #[sqlx::test]
     async fn test_domain_delete_not_found(pool: PgPool) {
         // Test JWT keys and User Creds
-        let (encoding_key, decoding_key) = gen_test_encode_decode_tokens();
-        let user_creds = gen_test_user_creds("foobar_user");
-
-        // Test JWT
-        let token = make_jwt("foobar_user", &encoding_key).unwrap();
+        let user_creds = gen_test_user_creds("test_user");
+        let (token, _, decoding_key) = gen_jwt_encode_decode_token(&user_creds).await;
 
         // Test Client
         let ep = OpenApiService::new(Api, "test", "1.0");
@@ -1051,11 +939,8 @@ mod tests {
     #[sqlx::test]
     async fn test_domain_remove_conflict(pool: PgPool) {
         // Test JWT keys and User Creds
-        let (encoding_key, decoding_key) = gen_test_encode_decode_tokens();
         let user_creds = gen_test_user_creds("test_user");
-
-        // Test JWT
-        let token = make_jwt("test_user", &encoding_key).unwrap();
+        let (token, _, decoding_key) = gen_jwt_encode_decode_token(&user_creds).await;
 
         // Payload to send into the API
         let domain_param = gen_test_domain_parm("test_domain");
@@ -1097,11 +982,8 @@ mod tests {
     #[sqlx::test]
     async fn test_domain_get_with_models(pool: PgPool) {
         // Test JWT keys and User Creds
-        let (encoding_key, decoding_key) = gen_test_encode_decode_tokens();
         let user_creds = gen_test_user_creds("test_user");
-
-        // Test JWT
-        let token = make_jwt("test_user", &encoding_key).unwrap();
+        let (token, _, decoding_key) = gen_jwt_encode_decode_token(&user_creds).await;
 
         // Test Client
         let ep = OpenApiService::new(Api, "test", "1.0");
@@ -1248,4 +1130,5 @@ mod tests {
             .assert_string("test_user");
     }
 }
+
 //TODO Add integration test
