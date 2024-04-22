@@ -11,6 +11,7 @@ use poem::{
 };
 use poem_openapi::{Enum, Object};
 use regex::Regex;
+use serde::Serialize;
 use sqlx::{FromRow, Postgres, Transaction, Type};
 use validator::{Validate, ValidationError};
 
@@ -48,7 +49,7 @@ impl Domain {
 }
 
 /// How to create a new domain
-#[derive(Debug, Object, Validate)]
+#[derive(Debug, Object, Serialize, Validate)]
 pub struct DomainParam {
     #[validate(custom(function = dbx_validater))]
     pub name: String,

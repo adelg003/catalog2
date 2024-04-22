@@ -12,8 +12,8 @@ use serde::{Deserialize, Serialize};
 /// Struct to hold user creds
 #[derive(Clone, Debug, Deserialize)]
 pub struct UserCred {
-    username: String,
-    hash: String,
+    pub username: String,
+    pub hash: String,
 }
 
 /// Struct to return when authenticating

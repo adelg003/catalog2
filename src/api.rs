@@ -428,4 +428,669 @@ impl Api {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::auth::UserCred;
+    use jsonwebtoken::DecodingKey;
+    use poem::{http::StatusCode, test::TestClient, web::headers::Authorization};
+    use poem_openapi::OpenApiService;
+    use serde_json::json;
+
+    /// Create the JWT tokens
+    fn gen_test_encode_decode_tokens() -> (EncodingKey, DecodingKey) {
+        // Test JWT secert and keys
+        let jwt_key =
+            b"N9&YMUGmNpP@dy$At6jv$CEoXRA5hEgNy%C3n4mVKQpDkJoFMZ5VxK#&e&7xrYrC5$nai73GE!dGKqxc";
+        let encoding_key = EncodingKey::from_secret(jwt_key);
+        let decoding_key = DecodingKey::from_secret(jwt_key);
+
+        (encoding_key, decoding_key)
+    }
+
+    /// Create test users creds
+    fn gen_test_user_creds(user: &str) -> Vec<UserCred> {
+        // Test user Cred
+        vec![UserCred {
+            username: user.to_string(),
+            hash: "$2b$12$QkHm2JiQg3WILPe0l/8Vqun7UVLqfSBLAzXiKbffGhs11RSqH7bjS".to_string(),
+        }]
+    }
+
+    /// Create test domain
+    fn gen_test_domain_parm(name: &str) -> DomainParam {
+        DomainParam {
+            name: name.to_string(),
+            owner: format!("{}@test.com", name),
+            extra: json!({
+                "abc": 123,
+                "def": [1, 2, 3],
+            }),
+        }
+    }
+
+    /// Create test model
+    fn gen_test_model_parm(name: &str, domain_name: &str) -> ModelParam {
+        ModelParam {
+            name: name.to_string(),
+            domain_name: domain_name.to_string(),
+            owner: format!("{}@test.com", name),
+            extra: json!({
+                "abc": 123,
+                "def": [1, 2, 3],
+            }),
+        }
+    }
+
+    /// Test creating a token
+    #[tokio::test]
+    async fn test_get_token_auth_basic() {
+        // Test JWT keys and User Creds
+        let (encoding_key, _) = gen_test_encode_decode_tokens();
+        let user_creds = gen_test_user_creds("test_user");
+
+        // Test Client
+        let ep = OpenApiService::new(Api, "test", "1.0");
+        let cli = TestClient::new(ep);
+
+        // Test Request
+        let response = cli
+            .post("/gen_token")
+            .typed_header(Authorization::basic("test_user", "abc123"))
+            .data(encoding_key)
+            .data(user_creds)
+            .send()
+            .await;
+
+        // Check status and Value
+        response.assert_status_is_ok();
+    }
+
+    /// Test bad request for creating a token
+    #[tokio::test]
+    async fn test_get_token_auth_basic_bad() {
+        // Test JWT keys and User Creds
+        let (encoding_key, _) = gen_test_encode_decode_tokens();
+        let user_creds = gen_test_user_creds("test_user");
+
+        // Test Client
+        let ep = OpenApiService::new(Api, "test", "1.0");
+        let cli = TestClient::new(ep);
+
+        // Test Request
+        let response = cli
+            .post("/gen_token")
+            .typed_header(Authorization::basic("test_user", "bad_password"))
+            .data(encoding_key)
+            .data(user_creds)
+            .send()
+            .await;
+
+        // Check status and Value
+        response.assert_status(StatusCode::UNAUTHORIZED);
+    }
+
+    /// Test creating a token
+    #[tokio::test]
+    async fn test_get_token_auth_token() {
+        // Test JWT keys and User Creds
+        let (encoding_key, decoding_key) = gen_test_encode_decode_tokens();
+        let user_creds = gen_test_user_creds("test_user");
+
+        // Test JWT
+        let token = make_jwt("test_user", &encoding_key).unwrap();
+
+        // Test Client
+        let ep = OpenApiService::new(Api, "test", "1.0");
+        let cli = TestClient::new(ep);
+
+        // Test Request
+        let response = cli
+            .post("/gen_token")
+            .header("X-API-Key", &token)
+            .data(encoding_key)
+            .data(decoding_key)
+            .data(user_creds)
+            .send()
+            .await;
+
+        // Check status and Value
+        response.assert_status_is_ok();
+    }
+
+    /// Test bad request for creating a token
+    #[tokio::test]
+    async fn test_get_token_auth_token_bad() {
+        // Test JWT keys and User Creds
+        let (encoding_key, decoding_key) = gen_test_encode_decode_tokens();
+        let user_creds = gen_test_user_creds("test_user");
+
+        // Test Client
+        let ep = OpenApiService::new(Api, "test", "1.0");
+        let cli = TestClient::new(ep);
+
+        // Test Request
+        let response = cli
+            .post("/gen_token")
+            .header("X-API-Key", "bad_token")
+            .data(encoding_key)
+            .data(decoding_key)
+            .data(user_creds)
+            .send()
+            .await;
+
+        // Check status and Value
+        response.assert_status(StatusCode::UNAUTHORIZED);
+    }
+
+    /// Test create domain
+    #[sqlx::test]
+    async fn test_domain_post(pool: PgPool) {
+        // Test JWT keys and User Creds
+        let (encoding_key, decoding_key) = gen_test_encode_decode_tokens();
+        let user_creds = gen_test_user_creds("test_user");
+
+        // Test JWT
+        let token = make_jwt("test_user", &encoding_key).unwrap();
+
+        // Payload to send into the API
+        let domain_param = gen_test_domain_parm("test_domain");
+        let body = serde_json::to_string(&domain_param).unwrap();
+
+        // Test Client
+        let ep = OpenApiService::new(Api, "test", "1.0");
+        let cli = TestClient::new(ep);
+
+        // Test Request
+        let response = cli
+            .post("/domain")
+            .header("X-API-Key", &token)
+            .header("Content-Type", "application/json; charset=utf-8")
+            .body(body)
+            .data(decoding_key)
+            .data(user_creds)
+            .data(pool)
+            .send()
+            .await;
+
+        // Check status
+        response.assert_status_is_ok();
+
+        // Check Values
+        let test_json = response.json().await;
+        let json_value = test_json.value();
+
+        json_value.object().get("id").assert_i64(1);
+        json_value.object().get("name").assert_string("test_domain");
+        json_value
+            .object()
+            .get("owner")
+            .assert_string("test_domain@test.com");
+        json_value
+            .object()
+            .get("extra")
+            .object()
+            .get("abc")
+            .assert_i64(123);
+        json_value
+            .object()
+            .get("extra")
+            .object()
+            .get("def")
+            .assert_i64_array(&[1, 2, 3]);
+        json_value
+            .object()
+            .get("created_by")
+            .assert_string("test_user");
+        json_value
+            .object()
+            .get("modified_by")
+            .assert_string("test_user");
+    }
+
+    /// Test create domain twice
+    #[sqlx::test]
+    async fn test_domain_post_conflict(pool: PgPool) {
+        // Test JWT keys and User Creds
+        let (encoding_key, decoding_key) = gen_test_encode_decode_tokens();
+        let user_creds = gen_test_user_creds("test_user");
+
+        // Test JWT
+        let token = make_jwt("test_user", &encoding_key).unwrap();
+
+        // Payload to send into the API
+        let domain_param = gen_test_domain_parm("test_domain");
+        let body = serde_json::to_string(&domain_param).unwrap();
+
+        // Test Client
+        let ep = OpenApiService::new(Api, "test", "1.0");
+        let cli = TestClient::new(ep);
+
+        // Create prior record
+        {
+            let mut tx = pool.begin().await.unwrap();
+            domain_add(&mut tx, &domain_param, "test_user")
+                .await
+                .unwrap();
+
+            tx.commit().await.unwrap();
+        }
+
+        // Add conflicting record
+        let response = cli
+            .post("/domain")
+            .header("X-API-Key", &token)
+            .header("Content-Type", "application/json; charset=utf-8")
+            .body(body)
+            .data(decoding_key)
+            .data(user_creds)
+            .data(pool)
+            .send()
+            .await;
+
+        // Check status
+        response.assert_status(StatusCode::CONFLICT);
+        response.assert_text("error returned from database: duplicate key value violates unique constraint \"domain_name_key\"").await;
+    }
+
+    /// Test domain get
+    #[sqlx::test]
+    async fn test_domain_get(pool: PgPool) {
+        // Payload to send into the API
+        let domain_param = gen_test_domain_parm("test_domain");
+
+        // Test Client
+        let ep = OpenApiService::new(Api, "test", "1.0");
+        let cli = TestClient::new(ep);
+
+        // Create record
+        {
+            let mut tx = pool.begin().await.unwrap();
+            domain_add(&mut tx, &domain_param, "test_user")
+                .await
+                .unwrap();
+
+            tx.commit().await.unwrap();
+        }
+
+        // Test Request
+        let response = cli
+            .get("/domain/test_domain")
+            .header("Content-Type", "application/json; charset=utf-8")
+            .data(pool)
+            .send()
+            .await;
+
+        // Check status
+        response.assert_status_is_ok();
+
+        // Check Values
+        let test_json = response.json().await;
+        let json_value = test_json.value();
+
+        json_value.object().get("id").assert_i64(1);
+        json_value.object().get("name").assert_string("test_domain");
+        json_value
+            .object()
+            .get("owner")
+            .assert_string("test_domain@test.com");
+        json_value
+            .object()
+            .get("extra")
+            .object()
+            .get("abc")
+            .assert_i64(123);
+        json_value
+            .object()
+            .get("extra")
+            .object()
+            .get("def")
+            .assert_i64_array(&[1, 2, 3]);
+        json_value
+            .object()
+            .get("created_by")
+            .assert_string("test_user");
+        json_value
+            .object()
+            .get("modified_by")
+            .assert_string("test_user");
+    }
+
+    /// Test Reading a domain that does not exists
+    #[sqlx::test]
+    async fn test_domain_get_not_found(pool: PgPool) {
+        // Test Client
+        let ep = OpenApiService::new(Api, "test", "1.0");
+        let cli = TestClient::new(ep);
+
+        // Test Request
+        let response = cli
+            .get("/domain/test_domain")
+            .header("Content-Type", "application/json; charset=utf-8")
+            .data(pool)
+            .send()
+            .await;
+
+        // Check status
+        response.assert_status(StatusCode::NOT_FOUND);
+        response
+            .assert_text("no rows returned by a query that expected to return at least one row")
+            .await;
+    }
+
+    /// Test domain put
+    #[sqlx::test]
+    async fn test_domain_put(pool: PgPool) {
+        // Test JWT keys and User Creds
+        let (encoding_key, decoding_key) = gen_test_encode_decode_tokens();
+        let user_creds = gen_test_user_creds("foobar_user");
+
+        // Test JWT
+        let token = make_jwt("foobar_user", &encoding_key).unwrap();
+
+        // Payload to send into the API
+        let domain_param = gen_test_domain_parm("test_domain");
+        let foobar_param = gen_test_domain_parm("foobar_domain");
+        let body = serde_json::to_string(&foobar_param).unwrap();
+
+        // Test Client
+        let ep = OpenApiService::new(Api, "test", "1.0");
+        let cli = TestClient::new(ep);
+
+        // Create prior record
+        {
+            let mut tx = pool.begin().await.unwrap();
+            domain_add(&mut tx, &domain_param, "test_user")
+                .await
+                .unwrap();
+
+            tx.commit().await.unwrap();
+        }
+
+        // Update existing record
+        let response = cli
+            .put("/domain/test_domain")
+            .header("X-API-Key", &token)
+            .header("Content-Type", "application/json; charset=utf-8")
+            .body(body)
+            .data(decoding_key)
+            .data(user_creds)
+            .data(pool)
+            .send()
+            .await;
+
+        // Check status
+        response.assert_status_is_ok();
+
+        // Check Values
+        let test_json = response.json().await;
+        let json_value = test_json.value();
+
+        json_value.object().get("id").assert_i64(1);
+        json_value
+            .object()
+            .get("name")
+            .assert_string("foobar_domain");
+        json_value
+            .object()
+            .get("owner")
+            .assert_string("foobar_domain@test.com");
+        json_value
+            .object()
+            .get("extra")
+            .object()
+            .get("abc")
+            .assert_i64(123);
+        json_value
+            .object()
+            .get("extra")
+            .object()
+            .get("def")
+            .assert_i64_array(&[1, 2, 3]);
+        json_value
+            .object()
+            .get("created_by")
+            .assert_string("test_user");
+        json_value
+            .object()
+            .get("modified_by")
+            .assert_string("foobar_user");
+    }
+
+    /// Test domain update where no domain found
+    #[sqlx::test]
+    async fn test_domain_put_not_found(pool: PgPool) {
+        // Test JWT keys and User Creds
+        let (encoding_key, decoding_key) = gen_test_encode_decode_tokens();
+        let user_creds = gen_test_user_creds("foobar_user");
+
+        // Test JWT
+        let token = make_jwt("foobar_user", &encoding_key).unwrap();
+
+        // Payload to send into the API
+        let domain_param = gen_test_domain_parm("test_domain");
+        let body = serde_json::to_string(&domain_param).unwrap();
+
+        // Test Client
+        let ep = OpenApiService::new(Api, "test", "1.0");
+        let cli = TestClient::new(ep);
+
+        // Add conflicting record
+        let response = cli
+            .put("/domain/test_domain")
+            .header("X-API-Key", &token)
+            .header("Content-Type", "application/json; charset=utf-8")
+            .body(body)
+            .data(decoding_key)
+            .data(user_creds)
+            .data(pool)
+            .send()
+            .await;
+
+        // Check status
+        response.assert_status(StatusCode::NOT_FOUND);
+        response.assert_text("domain does not exist").await;
+    }
+
+    /// Test domain update with conflict
+    #[sqlx::test]
+    async fn test_domain_put_conflict(pool: PgPool) {
+        // Test JWT keys and User Creds
+        let (encoding_key, decoding_key) = gen_test_encode_decode_tokens();
+        let user_creds = gen_test_user_creds("foobar_user");
+
+        // Test JWT
+        let token = make_jwt("foobar_user", &encoding_key).unwrap();
+
+        // Payload to send into the API
+        let domain_param = gen_test_domain_parm("test_domain");
+        let foobar_param = gen_test_domain_parm("foobar_domain");
+        let body = serde_json::to_string(&foobar_param).unwrap();
+
+        // Test Client
+        let ep = OpenApiService::new(Api, "test", "1.0");
+        let cli = TestClient::new(ep);
+
+        // Create prior records
+        {
+            let mut tx = pool.begin().await.unwrap();
+
+            domain_add(&mut tx, &domain_param, "test_user")
+                .await
+                .unwrap();
+
+            domain_add(&mut tx, &foobar_param, "test_user")
+                .await
+                .unwrap();
+
+            tx.commit().await.unwrap();
+        }
+
+        // Update existing record
+        let response = cli
+            .put("/domain/test_domain")
+            .header("X-API-Key", &token)
+            .header("Content-Type", "application/json; charset=utf-8")
+            .body(body)
+            .data(decoding_key)
+            .data(user_creds)
+            .data(pool)
+            .send()
+            .await;
+
+        // Check status
+        response.assert_status(StatusCode::CONFLICT);
+        response
+            .assert_text("duplicate key value violates unique constraint \"domain_name_key\"")
+            .await;
+    }
+
+    /// Test domain drop
+    #[sqlx::test]
+    async fn test_domain_delete(pool: PgPool) {
+        // Test JWT keys and User Creds
+        let (encoding_key, decoding_key) = gen_test_encode_decode_tokens();
+        let user_creds = gen_test_user_creds("foobar_user");
+
+        // Test JWT
+        let token = make_jwt("foobar_user", &encoding_key).unwrap();
+
+        // Payload to send into the API
+        let domain_param = gen_test_domain_parm("test_domain");
+
+        // Test Client
+        let ep = OpenApiService::new(Api, "test", "1.0");
+        let cli = TestClient::new(ep);
+
+        // Create prior records
+        {
+            let mut tx = pool.begin().await.unwrap();
+            domain_add(&mut tx, &domain_param, "test_user")
+                .await
+                .unwrap();
+            tx.commit().await.unwrap();
+        }
+
+        // Delete existing record
+        let response = cli
+            .delete("/domain/test_domain")
+            .header("X-API-Key", &token)
+            .header("Content-Type", "application/json; charset=utf-8")
+            .data(decoding_key)
+            .data(user_creds)
+            .data(pool)
+            .send()
+            .await;
+
+        // Check status
+        response.assert_status_is_ok();
+
+        // Check Values
+        let test_json = response.json().await;
+        let json_value = test_json.value();
+
+        json_value.object().get("id").assert_i64(1);
+        json_value.object().get("name").assert_string("test_domain");
+        json_value
+            .object()
+            .get("owner")
+            .assert_string("test_domain@test.com");
+        json_value
+            .object()
+            .get("extra")
+            .object()
+            .get("abc")
+            .assert_i64(123);
+        json_value
+            .object()
+            .get("extra")
+            .object()
+            .get("def")
+            .assert_i64_array(&[1, 2, 3]);
+        json_value
+            .object()
+            .get("created_by")
+            .assert_string("test_user");
+        json_value
+            .object()
+            .get("modified_by")
+            .assert_string("test_user");
+    }
+
+    /// Test domain drop if not exists
+    #[sqlx::test]
+    async fn test_domain_delete_not_found(pool: PgPool) {
+        // Test JWT keys and User Creds
+        let (encoding_key, decoding_key) = gen_test_encode_decode_tokens();
+        let user_creds = gen_test_user_creds("foobar_user");
+
+        // Test JWT
+        let token = make_jwt("foobar_user", &encoding_key).unwrap();
+
+        // Test Client
+        let ep = OpenApiService::new(Api, "test", "1.0");
+        let cli = TestClient::new(ep);
+
+        // Delete missing record
+        let response = cli
+            .delete("/domain/test_domain")
+            .header("X-API-Key", &token)
+            .header("Content-Type", "application/json; charset=utf-8")
+            .data(decoding_key)
+            .data(user_creds)
+            .data(pool)
+            .send()
+            .await;
+
+        // Check status
+        response.assert_status(StatusCode::NOT_FOUND);
+        response.assert_text("domain does not exist").await;
+    }
+
+    /// Test domain drop if children not droppped
+    #[sqlx::test]
+    async fn test_domain_remove_conflict(pool: PgPool) {
+        // Test JWT keys and User Creds
+        let (encoding_key, decoding_key) = gen_test_encode_decode_tokens();
+        let user_creds = gen_test_user_creds("test_user");
+
+        // Test JWT
+        let token = make_jwt("test_user", &encoding_key).unwrap();
+
+        // Payload to send into the API
+        let domain_param = gen_test_domain_parm("test_domain");
+        let model_param = gen_test_model_parm("test_model", "test_domain");
+
+        // Test Client
+        let ep = OpenApiService::new(Api, "test", "1.0");
+        let cli = TestClient::new(ep);
+
+        // Create prior records
+        {
+            let mut tx = pool.begin().await.unwrap();
+            domain_add(&mut tx, &domain_param, "test_user")
+                .await
+                .unwrap();
+            model_add(&mut tx, &model_param, "test_user").await.unwrap();
+            tx.commit().await.unwrap();
+        }
+
+        // Delete existing record
+        let response = cli
+            .delete("/domain/test_domain")
+            .header("X-API-Key", &token)
+            .header("Content-Type", "application/json; charset=utf-8")
+            .data(decoding_key)
+            .data(user_creds)
+            .data(pool)
+            .send()
+            .await;
+
+        // Check status
+        response.assert_status(StatusCode::CONFLICT);
+        response
+            .assert_text("update or delete on table \"domain\" violates foreign key constraint \"model_domain_id_fkey\" on table \"model\"")
+            .await;
+    }
+}
 //TODO Add integration test

@@ -23,4 +23,5 @@ tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 validator = { version = "0.17.0", features = ["derive"] }
 
 [dev-dependencies]
+poem = { version = "2.0.1", features = ["test"] }
 pretty_assertions = "1.4.0"
