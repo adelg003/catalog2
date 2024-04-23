@@ -127,3 +127,751 @@ impl ModelApi {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::util::test_utils::{
+        gen_jwt_encode_decode_token, gen_test_domain_json, gen_test_field_json,
+        gen_test_model_json, gen_test_user_creds, post_test_domain, post_test_field,
+        post_test_model,
+    };
+    use poem::{http::StatusCode, test::TestClient};
+    use poem_openapi::OpenApiService;
+    use sqlx::PgPool;
+
+    /// Test create model
+    #[sqlx::test]
+    async fn test_model_post(pool: PgPool) {
+        // Domain to create
+        let body = gen_test_domain_json("test_domain");
+        post_test_domain(&body, &pool).await;
+
+        // Test JWT keys and User Creds
+        let user_creds = gen_test_user_creds("test_user");
+        let (token, _, decoding_key) = gen_jwt_encode_decode_token(&user_creds).await;
+
+        // Payload to send into the API
+        let body = gen_test_model_json("test_model", "test_domain");
+
+        // Test Client
+        let ep = OpenApiService::new(ModelApi, "test", "1.0");
+        let cli = TestClient::new(ep);
+
+        // Test Request
+        let response = cli
+            .post("/model")
+            .header("X-API-Key", &token)
+            .header("Content-Type", "application/json; charset=utf-8")
+            .body_json(&body)
+            .data(decoding_key)
+            .data(user_creds)
+            .data(pool)
+            .send()
+            .await;
+
+        // Check status
+        response.assert_status_is_ok();
+
+        // Check Values
+        let test_json = response.json().await;
+        let json_value = test_json.value();
+
+        json_value.object().get("id").assert_i64(1);
+        json_value.object().get("name").assert_string("test_model");
+        json_value.object().get("domain_id").assert_i64(1);
+        json_value
+            .object()
+            .get("domain_name")
+            .assert_string("test_domain");
+        json_value
+            .object()
+            .get("owner")
+            .assert_string("test_model@test.com");
+        json_value
+            .object()
+            .get("extra")
+            .object()
+            .get("abc")
+            .assert_i64(123);
+        json_value
+            .object()
+            .get("extra")
+            .object()
+            .get("def")
+            .assert_i64_array(&[1, 2, 3]);
+        json_value
+            .object()
+            .get("created_by")
+            .assert_string("test_user");
+        json_value
+            .object()
+            .get("modified_by")
+            .assert_string("test_user");
+    }
+
+    /// Test model post where no domain found
+    #[sqlx::test]
+    async fn test_model_post_not_found(pool: PgPool) {
+        // Test JWT keys and User Creds
+        let user_creds = gen_test_user_creds("test_user");
+        let (token, _, decoding_key) = gen_jwt_encode_decode_token(&user_creds).await;
+
+        // Payload to send into the API
+        let body = gen_test_model_json("test_model", "foobar_domain");
+
+        // Test Client
+        let ep = OpenApiService::new(ModelApi, "test", "1.0");
+        let cli = TestClient::new(ep);
+
+        // Test Request
+        let response = cli
+            .post("/model")
+            .header("X-API-Key", &token)
+            .header("Content-Type", "application/json; charset=utf-8")
+            .body_json(&body)
+            .data(decoding_key)
+            .data(user_creds)
+            .data(pool)
+            .send()
+            .await;
+
+        // Check status
+        response.assert_status(StatusCode::NOT_FOUND);
+        response.assert_text("domain does not exist").await;
+    }
+
+    /// Test double model create conflict
+    #[sqlx::test]
+    async fn test_model_post_conflict(pool: PgPool) {
+        // Domain to create
+        let body = gen_test_domain_json("test_domain");
+        post_test_domain(&body, &pool).await;
+
+        // Model to create
+        let body = gen_test_model_json("test_model", "test_domain");
+        post_test_model(&body, &pool).await;
+
+        // Test JWT keys and User Creds
+        let user_creds = gen_test_user_creds("test_user");
+        let (token, _, decoding_key) = gen_jwt_encode_decode_token(&user_creds).await;
+
+        // Test Client
+        let ep = OpenApiService::new(ModelApi, "test", "1.0");
+        let cli = TestClient::new(ep);
+
+        // Test Request
+        let response = cli
+            .post("/model")
+            .header("X-API-Key", &token)
+            .header("Content-Type", "application/json; charset=utf-8")
+            .body_json(&body)
+            .data(decoding_key)
+            .data(user_creds)
+            .data(pool)
+            .send()
+            .await;
+
+        // Check status
+        response.assert_status(StatusCode::CONFLICT);
+        response
+            .assert_text("duplicate key value violates unique constraint \"model_name_key\"")
+            .await;
+    }
+
+    /// Test model get
+    #[sqlx::test]
+    async fn test_model_get(pool: PgPool) {
+        // Domain to create
+        let body = gen_test_domain_json("test_domain");
+        post_test_domain(&body, &pool).await;
+
+        // Model to create
+        let body = gen_test_model_json("test_model", "test_domain");
+        post_test_model(&body, &pool).await;
+
+        // Test JWT keys and User Creds
+        let user_creds = gen_test_user_creds("test_user");
+        let (token, _, decoding_key) = gen_jwt_encode_decode_token(&user_creds).await;
+
+        // Test Client
+        let ep = OpenApiService::new(ModelApi, "test", "1.0");
+        let cli = TestClient::new(ep);
+
+        // Test Request
+        let response = cli
+            .get("/model/test_model")
+            .header("X-API-Key", &token)
+            .header("Content-Type", "application/json; charset=utf-8")
+            .data(decoding_key)
+            .data(user_creds)
+            .data(pool)
+            .send()
+            .await;
+
+        // Check status
+        response.assert_status_is_ok();
+
+        // Check Values
+        let test_json = response.json().await;
+        let json_value = test_json.value();
+
+        json_value.object().get("id").assert_i64(1);
+        json_value.object().get("name").assert_string("test_model");
+        json_value.object().get("domain_id").assert_i64(1);
+        json_value
+            .object()
+            .get("domain_name")
+            .assert_string("test_domain");
+        json_value
+            .object()
+            .get("owner")
+            .assert_string("test_model@test.com");
+        json_value
+            .object()
+            .get("extra")
+            .object()
+            .get("abc")
+            .assert_i64(123);
+        json_value
+            .object()
+            .get("extra")
+            .object()
+            .get("def")
+            .assert_i64_array(&[1, 2, 3]);
+        json_value
+            .object()
+            .get("created_by")
+            .assert_string("test_user");
+        json_value
+            .object()
+            .get("modified_by")
+            .assert_string("test_user");
+    }
+
+    /// Test Reading a model that does not exists
+    #[sqlx::test]
+    async fn test_model_get_not_found(pool: PgPool) {
+        // Test JWT keys and User Creds
+        let user_creds = gen_test_user_creds("test_user");
+        let (token, _, decoding_key) = gen_jwt_encode_decode_token(&user_creds).await;
+
+        // Test Client
+        let ep = OpenApiService::new(ModelApi, "test", "1.0");
+        let cli = TestClient::new(ep);
+
+        // Test Request
+        let response = cli
+            .get("/model/test_model")
+            .header("X-API-Key", &token)
+            .header("Content-Type", "application/json; charset=utf-8")
+            .data(decoding_key)
+            .data(user_creds)
+            .data(pool)
+            .send()
+            .await;
+
+        // Check status
+        response.assert_status(StatusCode::NOT_FOUND);
+        response
+            .assert_text("no rows returned by a query that expected to return at least one row")
+            .await;
+    }
+
+    /// Test model update
+    #[sqlx::test]
+    async fn test_model_put(pool: PgPool) {
+        // Domain to create
+        let body = gen_test_domain_json("test_domain");
+        post_test_domain(&body, &pool).await;
+
+        // Model to create
+        let body = gen_test_model_json("test_model", "test_domain");
+        post_test_model(&body, &pool).await;
+
+        // Test JWT keys and User Creds
+        let user_creds = gen_test_user_creds("test_user");
+        let (token, _, decoding_key) = gen_jwt_encode_decode_token(&user_creds).await;
+
+        // Payload to send into the API
+        let body = gen_test_model_json("foobar_model", "test_domain");
+
+        // Test Client
+        let ep = OpenApiService::new(ModelApi, "test", "1.0");
+        let cli = TestClient::new(ep);
+
+        // Test Request
+        let response = cli
+            .put("/model/test_model")
+            .header("X-API-Key", &token)
+            .header("Content-Type", "application/json; charset=utf-8")
+            .body_json(&body)
+            .data(decoding_key)
+            .data(user_creds)
+            .data(pool)
+            .send()
+            .await;
+
+        // Check status
+        response.assert_status_is_ok();
+
+        // Check Values
+        let test_json = response.json().await;
+        let json_value = test_json.value();
+
+        json_value.object().get("id").assert_i64(1);
+        json_value
+            .object()
+            .get("name")
+            .assert_string("foobar_model");
+        json_value.object().get("domain_id").assert_i64(1);
+        json_value
+            .object()
+            .get("domain_name")
+            .assert_string("test_domain");
+        json_value
+            .object()
+            .get("owner")
+            .assert_string("foobar_model@test.com");
+        json_value
+            .object()
+            .get("extra")
+            .object()
+            .get("abc")
+            .assert_i64(123);
+        json_value
+            .object()
+            .get("extra")
+            .object()
+            .get("def")
+            .assert_i64_array(&[1, 2, 3]);
+        json_value
+            .object()
+            .get("created_by")
+            .assert_string("test_user");
+        json_value
+            .object()
+            .get("modified_by")
+            .assert_string("test_user");
+    }
+
+    /// Test model update when not found
+    #[sqlx::test]
+    async fn test_model_put_not_found(pool: PgPool) {
+        // Test JWT keys and User Creds
+        let user_creds = gen_test_user_creds("test_user");
+        let (token, _, decoding_key) = gen_jwt_encode_decode_token(&user_creds).await;
+
+        // Payload to send into the API
+        let body = gen_test_model_json("foobar_model", "test_domain");
+
+        // Test Client
+        let ep = OpenApiService::new(ModelApi, "test", "1.0");
+        let cli = TestClient::new(ep);
+
+        // Test Request
+        let response = cli
+            .put("/model/test_model")
+            .header("X-API-Key", &token)
+            .header("Content-Type", "application/json; charset=utf-8")
+            .body_json(&body)
+            .data(decoding_key)
+            .data(user_creds)
+            .data(pool)
+            .send()
+            .await;
+
+        // Check status
+        response.assert_status(StatusCode::NOT_FOUND);
+        response.assert_text("domain or model does not exist").await;
+    }
+
+    /// Test model update with Conflict
+    #[sqlx::test]
+    async fn test_model_put_conflict(pool: PgPool) {
+        // Domain to create
+        let body = gen_test_domain_json("test_domain");
+        post_test_domain(&body, &pool).await;
+
+        // Model to create
+        let body = gen_test_model_json("test_model", "test_domain");
+        post_test_model(&body, &pool).await;
+
+        // Model to create
+        let body = gen_test_model_json("foobar_model", "test_domain");
+        post_test_model(&body, &pool).await;
+
+        // Test JWT keys and User Creds
+        let user_creds = gen_test_user_creds("test_user");
+        let (token, _, decoding_key) = gen_jwt_encode_decode_token(&user_creds).await;
+
+        // Test Client
+        let ep = OpenApiService::new(ModelApi, "test", "1.0");
+        let cli = TestClient::new(ep);
+
+        // Test Request
+        let response = cli
+            .put("/model/test_model")
+            .header("X-API-Key", &token)
+            .header("Content-Type", "application/json; charset=utf-8")
+            .body_json(&body)
+            .data(decoding_key)
+            .data(user_creds)
+            .data(pool)
+            .send()
+            .await;
+
+        // Check status
+        response.assert_status(StatusCode::CONFLICT);
+        response
+            .assert_text("duplicate key value violates unique constraint \"model_name_key\"")
+            .await;
+    }
+
+    /// Test model delete
+    #[sqlx::test]
+    async fn test_model_delete(pool: PgPool) {
+        // Domain to create
+        let body = gen_test_domain_json("test_domain");
+        post_test_domain(&body, &pool).await;
+
+        // Model to create
+        let body = gen_test_model_json("test_model", "test_domain");
+        post_test_model(&body, &pool).await;
+
+        // Test JWT keys and User Creds
+        let user_creds = gen_test_user_creds("test_user");
+        let (token, _, decoding_key) = gen_jwt_encode_decode_token(&user_creds).await;
+
+        // Test Client
+        let ep = OpenApiService::new(ModelApi, "test", "1.0");
+        let cli = TestClient::new(ep);
+
+        // Test Request
+        let response = cli
+            .delete("/model/test_model")
+            .header("X-API-Key", &token)
+            .header("Content-Type", "application/json; charset=utf-8")
+            .data(decoding_key)
+            .data(user_creds)
+            .data(pool)
+            .send()
+            .await;
+
+        // Check status
+        response.assert_status_is_ok();
+
+        // Check Values
+        let test_json = response.json().await;
+        let json_value = test_json.value();
+
+        json_value.object().get("id").assert_i64(1);
+        json_value.object().get("name").assert_string("test_model");
+        json_value.object().get("domain_id").assert_i64(1);
+        json_value
+            .object()
+            .get("domain_name")
+            .assert_string("test_domain");
+        json_value
+            .object()
+            .get("owner")
+            .assert_string("test_model@test.com");
+        json_value
+            .object()
+            .get("extra")
+            .object()
+            .get("abc")
+            .assert_i64(123);
+        json_value
+            .object()
+            .get("extra")
+            .object()
+            .get("def")
+            .assert_i64_array(&[1, 2, 3]);
+        json_value
+            .object()
+            .get("created_by")
+            .assert_string("test_user");
+        json_value
+            .object()
+            .get("modified_by")
+            .assert_string("test_user");
+    }
+
+    /// Test model delete if not exists
+    #[sqlx::test]
+    async fn test_model_delete_not_exists(pool: PgPool) {
+        // Test JWT keys and User Creds
+        let user_creds = gen_test_user_creds("test_user");
+        let (token, _, decoding_key) = gen_jwt_encode_decode_token(&user_creds).await;
+
+        // Test Client
+        let ep = OpenApiService::new(ModelApi, "test", "1.0");
+        let cli = TestClient::new(ep);
+
+        // Test Request
+        let response = cli
+            .delete("/model/test_model")
+            .header("X-API-Key", &token)
+            .header("Content-Type", "application/json; charset=utf-8")
+            .data(decoding_key)
+            .data(user_creds)
+            .data(pool)
+            .send()
+            .await;
+
+        // Check status
+        response.assert_status(StatusCode::NOT_FOUND);
+        response.assert_text("model does not exist").await;
+    }
+
+    /// Test model delete if still have children
+    #[sqlx::test]
+    async fn test_model_delete_conflict(pool: PgPool) {
+        // Domain to create
+        let body = gen_test_domain_json("test_domain");
+        post_test_domain(&body, &pool).await;
+
+        // Model to create
+        let body = gen_test_model_json("test_model", "test_domain");
+        post_test_model(&body, &pool).await;
+
+        // Field to create
+        let body = gen_test_field_json("test_field", "test_model");
+        post_test_field(&body, &pool).await;
+
+        // Test JWT keys and User Creds
+        let user_creds = gen_test_user_creds("test_user");
+        let (token, _, decoding_key) = gen_jwt_encode_decode_token(&user_creds).await;
+
+        // Test Client
+        let ep = OpenApiService::new(ModelApi, "test", "1.0");
+        let cli = TestClient::new(ep);
+
+        // Test Request
+        let response = cli
+            .delete("/model/test_model")
+            .header("X-API-Key", &token)
+            .header("Content-Type", "application/json; charset=utf-8")
+            .data(decoding_key)
+            .data(user_creds)
+            .data(pool)
+            .send()
+            .await;
+
+        // Check status
+        response.assert_status(StatusCode::CONFLICT);
+        response.assert_text("update or delete on table \"model\" violates foreign key constraint \"field_model_id_fkey\" on table \"field\"").await;
+    }
+
+    /// Test model search
+    #[sqlx::test]
+    async fn test_model_get_search(pool: PgPool) {
+        // Domain to create
+        let body = gen_test_domain_json("test_domain");
+        post_test_domain(&body, &pool).await;
+
+        // Model to create
+        for index in 0..50 {
+            let body = gen_test_model_json(&format!("test_model_{}", index), "test_domain");
+            post_test_model(&body, &pool).await;
+        }
+
+        // Domain to create
+        let body = gen_test_domain_json("foobar_domain");
+        post_test_domain(&body, &pool).await;
+
+        // Model to create
+        let body = gen_test_model_json("foobar_model", "foobar_domain");
+        post_test_model(&body, &pool).await;
+
+        // Test Client
+        let ep = OpenApiService::new(ModelApi, "test", "1.0");
+        let cli = TestClient::new(ep);
+
+        {
+            // Test Request
+            let response = cli
+                .get("/search/model")
+                .header("Content-Type", "application/json; charset=utf-8")
+                .data(pool.clone())
+                .send()
+                .await;
+
+            // Check status
+            response.assert_status_is_ok();
+
+            // Check Values
+            let test_json = response.json().await;
+            let json_value = test_json.value();
+
+            json_value.object().get("models").array().assert_len(50);
+            json_value.object().get("page").assert_i64(0);
+            json_value.object().get("more").assert_bool(true);
+        }
+
+        {
+            // Test Request
+            let response = cli
+                .get("/search/model")
+                .header("Content-Type", "application/json; charset=utf-8")
+                .query("page", &1)
+                .data(pool.clone())
+                .send()
+                .await;
+
+            // Check status
+            response.assert_status_is_ok();
+
+            // Check Values
+            let test_json = response.json().await;
+            let json_value = test_json.value();
+
+            json_value.object().get("models").array().assert_len(1);
+            json_value.object().get("page").assert_i64(1);
+            json_value.object().get("more").assert_bool(false);
+        }
+
+        {
+            // Test Request
+            let response = cli
+                .get("/search/model")
+                .header("Content-Type", "application/json; charset=utf-8")
+                .query("model_name", &"test")
+                .data(pool.clone())
+                .send()
+                .await;
+
+            // Check status
+            response.assert_status_is_ok();
+
+            // Check Values
+            let test_json = response.json().await;
+            let json_value = test_json.value();
+
+            json_value.object().get("models").array().assert_len(50);
+            json_value.object().get("page").assert_i64(0);
+            json_value.object().get("more").assert_bool(false);
+        }
+
+        {
+            // Test Request
+            let response = cli
+                .get("/search/model")
+                .header("Content-Type", "application/json; charset=utf-8")
+                .query("model_name", &"abcdef")
+                .data(pool.clone())
+                .send()
+                .await;
+
+            // Check status
+            response.assert_status_is_ok();
+
+            // Check Values
+            let test_json = response.json().await;
+            let json_value = test_json.value();
+
+            json_value.object().get("models").array().assert_len(0);
+            json_value.object().get("page").assert_i64(0);
+            json_value.object().get("more").assert_bool(false);
+        }
+
+        {
+            // Test Request
+            let response = cli
+                .get("/search/model")
+                .header("Content-Type", "application/json; charset=utf-8")
+                .query("model_name", &"foobar")
+                .data(pool.clone())
+                .send()
+                .await;
+
+            // Check status
+            response.assert_status_is_ok();
+
+            // Check Values
+            let test_json = response.json().await;
+            let json_value = test_json.value();
+
+            json_value.object().get("models").array().assert_len(1);
+            json_value.object().get("page").assert_i64(0);
+            json_value.object().get("more").assert_bool(false);
+        }
+
+        {
+            // Test Request
+            let response = cli
+                .get("/search/model")
+                .header("Content-Type", "application/json; charset=utf-8")
+                .query("domain_name", &"test")
+                .data(pool.clone())
+                .send()
+                .await;
+
+            // Check status
+            response.assert_status_is_ok();
+
+            // Check Values
+            let test_json = response.json().await;
+            let json_value = test_json.value();
+
+            json_value.object().get("models").array().assert_len(50);
+            json_value.object().get("page").assert_i64(0);
+            json_value.object().get("more").assert_bool(false);
+        }
+
+        {
+            // Test Request
+            let response = cli
+                .get("/search/model")
+                .header("Content-Type", "application/json; charset=utf-8")
+                .query("model_name", &"foobar")
+                .query("owner", &"test.com")
+                .data(pool.clone())
+                .send()
+                .await;
+
+            // Check status
+            response.assert_status_is_ok();
+
+            // Check Values
+            let test_json = response.json().await;
+            let json_value = test_json.value();
+
+            json_value.object().get("models").array().assert_len(1);
+            json_value.object().get("page").assert_i64(0);
+            json_value.object().get("more").assert_bool(false);
+
+            json_value.object().get("models").object_array()[0]
+                .get("name")
+                .assert_string("foobar_model");
+        }
+
+        {
+            // Test Request
+            let response = cli
+                .get("/search/model")
+                .header("Content-Type", "application/json; charset=utf-8")
+                .query("model_name", &"foobar")
+                .query("owner", &"test.com")
+                .query("extra", &"abc")
+                .data(pool.clone())
+                .send()
+                .await;
+
+            // Check status
+            response.assert_status_is_ok();
+
+            // Check Values
+            let test_json = response.json().await;
+            let json_value = test_json.value();
+
+            json_value.object().get("models").array().assert_len(1);
+            json_value.object().get("page").assert_i64(0);
+            json_value.object().get("more").assert_bool(false);
+
+            json_value.object().get("models").object_array()[0]
+                .get("name")
+                .assert_string("foobar_model");
+        }
+    }
+}
