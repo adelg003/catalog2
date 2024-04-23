@@ -3,12 +3,14 @@ mod auth;
 mod core;
 mod db;
 mod domain;
+mod model;
 mod util;
 
 use crate::{
     api::Api,
     auth::{AuthApi, UserCred},
     domain::DomainApi,
+    model::ModelApi,
 };
 use color_eyre::eyre;
 use jsonwebtoken::{DecodingKey, EncodingKey};
@@ -49,7 +51,7 @@ async fn main() -> Result<(), eyre::Error> {
 
     // Setup OpenAPI Swagger Page
     // TODO - Remove raw API
-    let api_service = OpenApiService::new((Api, AuthApi, DomainApi), "Catalog2", "0.1.0")
+    let api_service = OpenApiService::new((Api, AuthApi, DomainApi, ModelApi), "Catalog2", "0.1.0")
         .server(format!("http://{}/api", web_addr_str));
     let spec = api_service.spec_endpoint();
     let swagger = api_service.swagger_ui();

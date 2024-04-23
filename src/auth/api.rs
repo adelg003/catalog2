@@ -31,7 +31,7 @@ impl AuthApi {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::api::tests::{gen_encode_decode_token, gen_test_user_creds};
+    use crate::util::test_utils::{gen_encode_decode_token, gen_test_user_creds};
     use poem::{http::StatusCode, test::TestClient, web::headers::Authorization};
     use poem_openapi::OpenApiService;
 

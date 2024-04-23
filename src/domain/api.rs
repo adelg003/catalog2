@@ -129,10 +129,9 @@ impl DomainApi {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        api::tests::{gen_jwt_encode_decode_token, gen_test_model_parm, gen_test_user_creds},
-        core::model_add,
-        domain::core::tests::gen_test_domain_parm,
+    use crate::util::test_utils::{
+        gen_jwt_encode_decode_token, gen_test_domain_json, gen_test_model_json,
+        gen_test_user_creds, post_test_domain, post_test_model,
     };
     use poem::{http::StatusCode, test::TestClient};
     use poem_openapi::OpenApiService;
@@ -145,8 +144,7 @@ mod tests {
         let (token, _, decoding_key) = gen_jwt_encode_decode_token(&user_creds).await;
 
         // Payload to send into the API
-        let domain_param = gen_test_domain_parm("test_domain");
-        let body = serde_json::to_string(&domain_param).unwrap();
+        let body = gen_test_domain_json("test_domain");
 
         // Test Client
         let ep = OpenApiService::new(DomainApi, "test", "1.0");
@@ -157,7 +155,7 @@ mod tests {
             .post("/domain")
             .header("X-API-Key", &token)
             .header("Content-Type", "application/json; charset=utf-8")
-            .body(body)
+            .body_json(&body)
             .data(decoding_key)
             .data(user_creds)
             .data(pool)
@@ -202,34 +200,24 @@ mod tests {
     /// Test create domain twice
     #[sqlx::test]
     async fn test_domain_post_conflict(pool: PgPool) {
+        // Domain to create
+        let body = gen_test_domain_json("test_domain");
+        post_test_domain(&body, &pool).await;
+
         // Test JWT keys and User Creds
         let user_creds = gen_test_user_creds("test_user");
         let (token, _, decoding_key) = gen_jwt_encode_decode_token(&user_creds).await;
 
-        // Payload to send into the API
-        let domain_param = gen_test_domain_parm("test_domain");
-        let body = serde_json::to_string(&domain_param).unwrap();
-
         // Test Client
         let ep = OpenApiService::new(DomainApi, "test", "1.0");
         let cli = TestClient::new(ep);
-
-        // Create prior record
-        {
-            let mut tx = pool.begin().await.unwrap();
-            domain_add(&mut tx, &domain_param, "test_user")
-                .await
-                .unwrap();
-
-            tx.commit().await.unwrap();
-        }
 
         // Add conflicting record
         let response = cli
             .post("/domain")
             .header("X-API-Key", &token)
             .header("Content-Type", "application/json; charset=utf-8")
-            .body(body)
+            .body_json(&body)
             .data(decoding_key)
             .data(user_creds)
             .data(pool)
@@ -244,22 +232,13 @@ mod tests {
     /// Test domain get
     #[sqlx::test]
     async fn test_domain_get(pool: PgPool) {
-        // Payload to send into the API
-        let domain_param = gen_test_domain_parm("test_domain");
+        // Domain to create
+        let body = gen_test_domain_json("test_domain");
+        post_test_domain(&body, &pool).await;
 
         // Test Client
         let ep = OpenApiService::new(DomainApi, "test", "1.0");
         let cli = TestClient::new(ep);
-
-        // Create record
-        {
-            let mut tx = pool.begin().await.unwrap();
-            domain_add(&mut tx, &domain_param, "test_user")
-                .await
-                .unwrap();
-
-            tx.commit().await.unwrap();
-        }
 
         // Test Request
         let response = cli
@@ -329,35 +308,27 @@ mod tests {
     /// Test domain put
     #[sqlx::test]
     async fn test_domain_put(pool: PgPool) {
+        // Domain to create
+        let body = gen_test_domain_json("test_domain");
+        post_test_domain(&body, &pool).await;
+
         // Test JWT keys and User Creds
         let user_creds = gen_test_user_creds("test_user");
         let (token, _, decoding_key) = gen_jwt_encode_decode_token(&user_creds).await;
 
         // Payload to send into the API
-        let domain_param = gen_test_domain_parm("test_domain");
-        let foobar_param = gen_test_domain_parm("foobar_domain");
-        let body = serde_json::to_string(&foobar_param).unwrap();
+        let body = gen_test_domain_json("foobar_domain");
 
         // Test Client
         let ep = OpenApiService::new(DomainApi, "test", "1.0");
         let cli = TestClient::new(ep);
-
-        // Create prior record
-        {
-            let mut tx = pool.begin().await.unwrap();
-            domain_add(&mut tx, &domain_param, "test_user")
-                .await
-                .unwrap();
-
-            tx.commit().await.unwrap();
-        }
 
         // Update existing record
         let response = cli
             .put("/domain/test_domain")
             .header("X-API-Key", &token)
             .header("Content-Type", "application/json; charset=utf-8")
-            .body(body)
+            .body_json(&body)
             .data(decoding_key)
             .data(user_creds)
             .data(pool)
@@ -405,13 +376,12 @@ mod tests {
     /// Test domain update where no domain found
     #[sqlx::test]
     async fn test_domain_put_not_found(pool: PgPool) {
+        // Domain to create
+        let body = gen_test_domain_json("test_domain");
+
         // Test JWT keys and User Creds
         let user_creds = gen_test_user_creds("test_user");
         let (token, _, decoding_key) = gen_jwt_encode_decode_token(&user_creds).await;
-
-        // Payload to send into the API
-        let domain_param = gen_test_domain_parm("test_domain");
-        let body = serde_json::to_string(&domain_param).unwrap();
 
         // Test Client
         let ep = OpenApiService::new(DomainApi, "test", "1.0");
@@ -422,7 +392,7 @@ mod tests {
             .put("/domain/test_domain")
             .header("X-API-Key", &token)
             .header("Content-Type", "application/json; charset=utf-8")
-            .body(body)
+            .body_json(&body)
             .data(decoding_key)
             .data(user_creds)
             .data(pool)
@@ -437,40 +407,28 @@ mod tests {
     /// Test domain update with conflict
     #[sqlx::test]
     async fn test_domain_put_conflict(pool: PgPool) {
+        // Domain to create
+        let body = gen_test_domain_json("test_domain");
+        post_test_domain(&body, &pool).await;
+
+        // Domain to create
+        let body = gen_test_domain_json("foobar_domain");
+        post_test_domain(&body, &pool).await;
+
         // Test JWT keys and User Creds
         let user_creds = gen_test_user_creds("test_user");
         let (token, _, decoding_key) = gen_jwt_encode_decode_token(&user_creds).await;
 
-        // Payload to send into the API
-        let domain_param = gen_test_domain_parm("test_domain");
-        let foobar_param = gen_test_domain_parm("foobar_domain");
-        let body = serde_json::to_string(&foobar_param).unwrap();
-
         // Test Client
         let ep = OpenApiService::new(DomainApi, "test", "1.0");
         let cli = TestClient::new(ep);
-
-        // Create prior records
-        {
-            let mut tx = pool.begin().await.unwrap();
-
-            domain_add(&mut tx, &domain_param, "test_user")
-                .await
-                .unwrap();
-
-            domain_add(&mut tx, &foobar_param, "test_user")
-                .await
-                .unwrap();
-
-            tx.commit().await.unwrap();
-        }
 
         // Update existing record
         let response = cli
             .put("/domain/test_domain")
             .header("X-API-Key", &token)
             .header("Content-Type", "application/json; charset=utf-8")
-            .body(body)
+            .body_json(&body)
             .data(decoding_key)
             .data(user_creds)
             .data(pool)
@@ -487,25 +445,17 @@ mod tests {
     /// Test domain drop
     #[sqlx::test]
     async fn test_domain_delete(pool: PgPool) {
+        // Domain to create
+        let body = gen_test_domain_json("test_domain");
+        post_test_domain(&body, &pool).await;
+
         // Test JWT keys and User Creds
         let user_creds = gen_test_user_creds("test_user");
         let (token, _, decoding_key) = gen_jwt_encode_decode_token(&user_creds).await;
 
-        // Payload to send into the API
-        let domain_param = gen_test_domain_parm("test_domain");
-
         // Test Client
         let ep = OpenApiService::new(DomainApi, "test", "1.0");
         let cli = TestClient::new(ep);
-
-        // Create prior records
-        {
-            let mut tx = pool.begin().await.unwrap();
-            domain_add(&mut tx, &domain_param, "test_user")
-                .await
-                .unwrap();
-            tx.commit().await.unwrap();
-        }
 
         // Delete existing record
         let response = cli
@@ -583,27 +533,21 @@ mod tests {
     /// Test domain drop if children not droppped
     #[sqlx::test]
     async fn test_domain_remove_conflict(pool: PgPool) {
+        // Domain to create
+        let body = gen_test_domain_json("test_domain");
+        post_test_domain(&body, &pool).await;
+
+        // Model to create
+        let body = gen_test_model_json("test_model", "test_domain");
+        post_test_model(&body, &pool).await;
+
         // Test JWT keys and User Creds
         let user_creds = gen_test_user_creds("test_user");
         let (token, _, decoding_key) = gen_jwt_encode_decode_token(&user_creds).await;
 
-        // Payload to send into the API
-        let domain_param = gen_test_domain_parm("test_domain");
-        let model_param = gen_test_model_parm("test_model", "test_domain");
-
         // Test Client
         let ep = OpenApiService::new(DomainApi, "test", "1.0");
         let cli = TestClient::new(ep);
-
-        // Create prior records
-        {
-            let mut tx = pool.begin().await.unwrap();
-            domain_add(&mut tx, &domain_param, "test_user")
-                .await
-                .unwrap();
-            model_add(&mut tx, &model_param, "test_user").await.unwrap();
-            tx.commit().await.unwrap();
-        }
 
         // Delete existing record
         let response = cli

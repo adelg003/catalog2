@@ -1,4 +1,5 @@
 use crate::{
+    api::PAGE_SIZE,
     domain::db::{domain_drop, domain_insert, domain_select, domain_select_search, domain_update},
     util::dbx_validater,
 };
@@ -11,8 +12,6 @@ use poem_openapi::Object;
 use serde::Serialize;
 use sqlx::{FromRow, Postgres, Transaction};
 use validator::Validate;
-
-const PAGE_SIZE: u64 = 50;
 
 /// Domain Shared
 #[derive(Debug, FromRow, Object)]
@@ -169,24 +168,15 @@ pub async fn domain_remove(
 }
 
 #[cfg(test)]
-pub mod tests {
+mod tests {
     use super::*;
-    use crate::{core::tests::gen_test_model_parm, db::model_insert};
+    use crate::{
+        domain::util::test_utils::gen_test_domain_parm,
+        util::test_utils::{gen_test_model_json, post_test_model},
+    };
     use pretty_assertions::assert_eq;
     use serde_json::json;
     use sqlx::PgPool;
-
-    /// Create test domain
-    pub fn gen_test_domain_parm(name: &str) -> DomainParam {
-        DomainParam {
-            name: name.to_string(),
-            owner: format!("{}@test.com", name),
-            extra: json!({
-                "abc": 123,
-                "def": [1, 2, 3],
-            }),
-        }
-    }
 
     /// Test create domain
     #[sqlx::test]
@@ -532,15 +522,16 @@ pub mod tests {
     #[sqlx::test]
     async fn test_domain_remove_conflict(pool: PgPool) {
         {
-            let domain_param = gen_test_domain_parm("test_domain");
-            let model_param = gen_test_model_parm("test_model", "test_domain");
-
             let mut tx = pool.begin().await.unwrap();
+
+            let domain_param = gen_test_domain_parm("test_domain");
             domain_insert(&mut tx, &domain_param, "test").await.unwrap();
-            model_insert(&mut tx, &model_param, "test").await.unwrap();
 
             tx.commit().await.unwrap();
         }
+
+        let body = gen_test_model_json("test_model", "test_domain");
+        post_test_model(&body, &pool).await;
 
         let err = {
             let mut tx = pool.begin().await.unwrap();
