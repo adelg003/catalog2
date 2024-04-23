@@ -566,4 +566,168 @@ mod tests {
             .assert_text("update or delete on table \"domain\" violates foreign key constraint \"model_domain_id_fkey\" on table \"model\"")
             .await;
     }
+
+    /// Test domain search
+    #[sqlx::test]
+    async fn test_domain_get_search(pool: PgPool) {
+        for index in 0..50 {
+            // Domain to create
+            let body = gen_test_domain_json(&format!("test_domain_{}", index));
+            post_test_domain(&body, &pool).await;
+        }
+
+        // Domain to create
+        let body = gen_test_domain_json("foobar_domain");
+        post_test_domain(&body, &pool).await;
+
+        // Test Client
+        let ep = OpenApiService::new(DomainApi, "test", "1.0");
+        let cli = TestClient::new(ep);
+
+        {
+            // Test Request
+            let response = cli
+                .get("/search/domain")
+                .header("Content-Type", "application/json; charset=utf-8")
+                .data(pool.clone())
+                .send()
+                .await;
+
+            // Check status
+            response.assert_status_is_ok();
+
+            // Check Values
+            let test_json = response.json().await;
+            let json_value = test_json.value();
+
+            json_value.object().get("domains").array().assert_len(50);
+            json_value.object().get("page").assert_i64(0);
+            json_value.object().get("more").assert_bool(true);
+        }
+
+        {
+            // Test Request
+            let response = cli
+                .get("/search/domain")
+                .header("Content-Type", "application/json; charset=utf-8")
+                .query("page", &1)
+                .data(pool.clone())
+                .send()
+                .await;
+
+            // Check status
+            response.assert_status_is_ok();
+
+            // Check Values
+            let test_json = response.json().await;
+            let json_value = test_json.value();
+
+            json_value.object().get("domains").array().assert_len(1);
+            json_value.object().get("page").assert_i64(1);
+            json_value.object().get("more").assert_bool(false);
+        }
+
+        {
+            // Test Request
+            let response = cli
+                .get("/search/domain")
+                .header("Content-Type", "application/json; charset=utf-8")
+                .query("domain_name", &"abcdef")
+                .data(pool.clone())
+                .send()
+                .await;
+
+            // Check status
+            response.assert_status_is_ok();
+
+            // Check Values
+            let test_json = response.json().await;
+            let json_value = test_json.value();
+
+            json_value.object().get("domains").array().assert_len(0);
+            json_value.object().get("page").assert_i64(0);
+            json_value.object().get("more").assert_bool(false);
+        }
+
+        {
+            // Test Request
+            let response = cli
+                .get("/search/domain")
+                .header("Content-Type", "application/json; charset=utf-8")
+                .query("domain_name", &"foobar")
+                .data(pool.clone())
+                .send()
+                .await;
+
+            // Check status
+            response.assert_status_is_ok();
+
+            // Check Values
+            let test_json = response.json().await;
+            let json_value = test_json.value();
+
+            json_value.object().get("domains").array().assert_len(1);
+            json_value.object().get("page").assert_i64(0);
+            json_value.object().get("more").assert_bool(false);
+
+            json_value.object().get("domains").object_array()[0]
+                .get("name")
+                .assert_string("foobar_domain");
+        }
+
+        {
+            // Test Request
+            let response = cli
+                .get("/search/domain")
+                .header("Content-Type", "application/json; charset=utf-8")
+                .query("domain_name", &"foobar")
+                .query("owner", &"test.com")
+                .data(pool.clone())
+                .send()
+                .await;
+
+            // Check status
+            response.assert_status_is_ok();
+
+            // Check Values
+            let test_json = response.json().await;
+            let json_value = test_json.value();
+
+            json_value.object().get("domains").array().assert_len(1);
+            json_value.object().get("page").assert_i64(0);
+            json_value.object().get("more").assert_bool(false);
+
+            json_value.object().get("domains").object_array()[0]
+                .get("name")
+                .assert_string("foobar_domain");
+        }
+
+        {
+            // Test Request
+            let response = cli
+                .get("/search/domain")
+                .header("Content-Type", "application/json; charset=utf-8")
+                .query("domain_name", &"foobar")
+                .query("owner", &"test.com")
+                .query("extra", &"abc")
+                .data(pool.clone())
+                .send()
+                .await;
+
+            // Check status
+            response.assert_status_is_ok();
+
+            // Check Values
+            let test_json = response.json().await;
+            let json_value = test_json.value();
+
+            json_value.object().get("domains").array().assert_len(1);
+            json_value.object().get("page").assert_i64(0);
+            json_value.object().get("more").assert_bool(false);
+
+            json_value.object().get("domains").object_array()[0]
+                .get("name")
+                .assert_string("foobar_domain");
+        }
+    }
 }
