@@ -1,5 +1,5 @@
 use crate::{
-    api::Tag,
+    util::Tag,
     auth::core::{make_jwt, Auth, TokenOrBasicAuth},
 };
 use jsonwebtoken::EncodingKey;

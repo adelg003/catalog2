@@ -1,5 +1,5 @@
 use crate::{
-    api::Tag,
+    util::Tag,
     auth::{Auth, TokenAuth},
     field::core::{
         field_add, field_edit, field_read, field_remove, Field, FieldParam, FieldParamUpdate,
@@ -113,7 +113,6 @@ mod tests {
     use poem_openapi::OpenApiService;
     use sqlx::PgPool;
 
-    // TODO Add Unit Tests
     /// Test create model
     #[sqlx::test]
     async fn test_field_post(pool: PgPool) {
@@ -633,6 +632,8 @@ mod tests {
 
         // Check status
         response.assert_status(StatusCode::NOT_FOUND);
-        response.assert_text("no rows returned by a query that expected to return at least one row").await;
+        response
+            .assert_text("no rows returned by a query that expected to return at least one row")
+            .await;
     }
 }

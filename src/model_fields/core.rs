@@ -1,30 +1,12 @@
 use crate::{
-    db::{field_drop_by_model, field_select_by_model},
     field::{field_add, DbxDataType, Field, FieldParam},
     model::{model_add, model_read, model_remove, Model, ModelParam},
+    model_fields::db::{field_drop_by_model, field_select_by_model},
 };
 use poem::error::{BadRequest, InternalServerError};
 use poem_openapi::Object;
 use sqlx::{Postgres, Transaction};
 use validator::Validate;
-
-impl Model {
-    /// Add fields details to a model
-    async fn add_fields(
-        self,
-        tx: &mut Transaction<'_, Postgres>,
-    ) -> Result<ModelFields, poem::Error> {
-        // Pull models
-        let fields = field_select_by_model(tx, &self.name)
-            .await
-            .map_err(InternalServerError)?;
-
-        Ok(ModelFields {
-            model: self,
-            fields,
-        })
-    }
-}
 
 /// Model with fields
 #[derive(Object)]
@@ -96,10 +78,15 @@ pub async fn model_read_with_fields(
     tx: &mut Transaction<'_, Postgres>,
     model_name: &str,
 ) -> Result<ModelFields, poem::Error> {
-    // Pull domain_models
-    let model_fields = model_read(tx, model_name).await?.add_fields(tx).await?;
+    // Pull model
+    let model = model_read(tx, model_name).await?;
 
-    Ok(model_fields)
+    // Pull models
+    let fields = field_select_by_model(tx, model_name)
+        .await
+        .map_err(InternalServerError)?;
+
+    Ok(ModelFields { model, fields })
 }
 
 /// Delete a model with all its fields
@@ -122,7 +109,7 @@ pub async fn model_remove_with_fields(
 mod tests {
     use super::*;
     use crate::{
-        api::Api,
+        model_fields::ModelFieldsApi,
         util::test_utils::{
             gen_test_domain_json, gen_test_field_json, gen_test_model_json, post_test_domain,
             post_test_field, post_test_model,
@@ -135,7 +122,7 @@ mod tests {
     use sqlx::PgPool;
 
     /// Create test model
-    pub fn gen_test_model_parm(name: &str, domain_name: &str) -> ModelParam {
+    fn gen_test_model_parm(name: &str, domain_name: &str) -> ModelParam {
         ModelParam {
             name: name.to_string(),
             domain_name: domain_name.to_string(),
@@ -387,7 +374,7 @@ mod tests {
         assert_eq!(model_fields.fields.len(), 2);
 
         // Test Client
-        let ep = OpenApiService::new(Api, "test", "1.0");
+        let ep = OpenApiService::new(ModelFieldsApi, "test", "1.0");
         let cli = TestClient::new(ep);
 
         // Test Request

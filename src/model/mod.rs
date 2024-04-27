@@ -5,6 +5,6 @@ mod util;
 
 pub use crate::model::{
     api::ModelApi,
-    core::{model_add, model_read, model_remove, Model, ModelParam}, //TODO remove ModelParam?
+    core::{model_add, model_read, model_remove, Model, ModelParam},
     db::model_select,
 };

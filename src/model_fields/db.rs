@@ -105,16 +105,16 @@ mod tests {
         let body = gen_test_field_json("test_field1", "test_model");
         post_test_field(&body, &pool).await;
 
-        //// Field to create
-        //let body = gen_test_field_json("test_field2", "test_model");
-        //post_test_field(&body, &pool).await;
+        // Field to create
+        let body = gen_test_field_json("test_field2", "test_model");
+        post_test_field(&body, &pool).await;
 
-        //{
-        //    let mut tx = pool.begin().await.unwrap();
-        //    let fields = field_select_by_model(&mut tx, "test_model").await.unwrap();
+        {
+            let mut tx = pool.begin().await.unwrap();
+            let fields = field_select_by_model(&mut tx, "test_model").await.unwrap();
 
-        //    assert_eq!(fields.len(), 2);
-        //}
+            assert_eq!(fields.len(), 2);
+        }
     }
 
     /// Test field drop by model

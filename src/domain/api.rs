@@ -1,5 +1,5 @@
 use crate::{
-    api::Tag,
+    util::Tag,
     auth::{Auth, TokenAuth},
     domain::core::{
         domain_add, domain_edit, domain_read, domain_read_search, domain_remove, Domain,

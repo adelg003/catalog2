@@ -1,5 +1,5 @@
 use crate::{
-    api::Tag,
+    util::Tag,
     auth::{Auth, TokenAuth},
     model::core::{
         model_add, model_edit, model_read, model_read_search, model_remove, Model, ModelParam,

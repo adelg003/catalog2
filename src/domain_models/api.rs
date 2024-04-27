@@ -1,5 +1,5 @@
 use crate::{
-    api::Tag,
+    util::Tag,
     domain_models::core::{domain_read_with_models, DomainModels},
 };
 use poem::{error::InternalServerError, web::Data};
@@ -12,7 +12,7 @@ pub struct DomainModelsApi;
 #[OpenApi]
 impl DomainModelsApi {
     /// Get a single domain and its models
-    #[oai(path = "/domain_with_models/:domain_name", method = "get", tag = Tag::DomainWithModels)]
+    #[oai(path = "/domain_with_models/:domain_name", method = "get", tag = Tag::DomainModels)]
     async fn domain_get_with_models(
         &self,
         Data(pool): Data<&PgPool>,
