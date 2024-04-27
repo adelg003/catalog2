@@ -1,9 +1,8 @@
 use crate::{
     auth::{Auth, TokenAuth},
     core::{
-        field_add, field_edit, field_read, field_remove, model_add_with_fields,
-        model_read_with_fields, model_remove_with_fields, Field, FieldParam, FieldParamUpdate,
-        ModelFields, ModelFieldsParam,
+        model_add_with_fields, model_read_with_fields, model_remove_with_fields, ModelFields,
+        ModelFieldsParam,
     },
 };
 use poem::{error::InternalServerError, web::Data};
@@ -88,91 +87,5 @@ impl Api {
         tx.commit().await.map_err(InternalServerError)?;
 
         Ok(Json(model_fields))
-    }
-
-    /// Add a field to the field table
-    #[oai(path = "/field", method = "post", tag = Tag::Field)]
-    async fn field_post(
-        &self,
-        auth: TokenAuth,
-        Data(pool): Data<&PgPool>,
-        Json(field_param): Json<FieldParam>,
-    ) -> Result<Json<Field>, poem::Error> {
-        // Get user from authentication.
-        let username = auth.username();
-
-        // Start Transaction
-        let mut tx = pool.begin().await.map_err(InternalServerError)?;
-
-        // Run Domain add logic
-        let field = field_add(&mut tx, &field_param, username).await?;
-
-        // Commit Transaction
-        tx.commit().await.map_err(InternalServerError)?;
-
-        Ok(Json(field))
-    }
-
-    /// Get a single field
-    #[oai(path = "/field/:model_name/:field_name", method = "get", tag = Tag::Field)]
-    async fn field_get(
-        &self,
-        Data(pool): Data<&PgPool>,
-        Path(model_name): Path<String>,
-        Path(field_name): Path<String>,
-    ) -> Result<Json<Field>, poem::Error> {
-        // Start Transaction
-        let mut tx = pool.begin().await.map_err(InternalServerError)?;
-
-        // Pull field
-        let field = field_read(&mut tx, &model_name, &field_name).await?;
-
-        Ok(Json(field))
-    }
-
-    /// Change a field to the field table
-    #[oai(path = "/field/:model_name/:field_name", method = "put", tag = Tag::Field)]
-    async fn field_put(
-        &self,
-        auth: TokenAuth,
-        Data(pool): Data<&PgPool>,
-        Path(model_name): Path<String>,
-        Path(field_name): Path<String>,
-        Json(field_param): Json<FieldParamUpdate>,
-    ) -> Result<Json<Field>, poem::Error> {
-        // Get user from authentication.
-        let username = auth.username();
-
-        // Start Transaction
-        let mut tx = pool.begin().await.map_err(InternalServerError)?;
-
-        // Run Model add logic
-        let field = field_edit(&mut tx, &model_name, &field_name, &field_param, username).await?;
-
-        // Commit Transaction
-        tx.commit().await.map_err(InternalServerError)?;
-
-        Ok(Json(field))
-    }
-
-    /// Delete a field
-    #[oai(path = "/field/:model_name/:field_name", method = "delete", tag = Tag::Field)]
-    async fn field_delete(
-        &self,
-        _auth: TokenAuth,
-        Data(pool): Data<&PgPool>,
-        Path(model_name): Path<String>,
-        Path(field_name): Path<String>,
-    ) -> Result<Json<Field>, poem::Error> {
-        // Start Transaction
-        let mut tx = pool.begin().await.map_err(InternalServerError)?;
-
-        // Delete Field
-        let field = field_remove(&mut tx, &model_name, &field_name).await?;
-
-        // Commit Transaction
-        tx.commit().await.map_err(InternalServerError)?;
-
-        Ok(Json(field))
     }
 }

@@ -31,9 +31,9 @@ mod tests {
 #[cfg(test)]
 pub mod test_utils {
     use crate::{
-        api::Api,
         auth::{AuthApi, UserCred},
         domain::DomainApi,
+        field::FieldApi,
         model::ModelApi,
     };
     use jsonwebtoken::{DecodingKey, EncodingKey};
@@ -188,7 +188,7 @@ pub mod test_utils {
         let (token, _, decoding_key) = gen_jwt_encode_decode_token(&user_creds).await;
 
         // Test Client
-        let ep = OpenApiService::new(Api, "test", "1.0");
+        let ep = OpenApiService::new(FieldApi, "test", "1.0");
         let cli = TestClient::new(ep);
 
         // Create Domain

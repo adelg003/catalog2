@@ -4,6 +4,7 @@ mod core;
 mod db;
 mod domain;
 mod domain_models;
+mod field;
 mod model;
 mod util;
 
@@ -12,6 +13,7 @@ use crate::{
     auth::{AuthApi, UserCred},
     domain::DomainApi,
     domain_models::DomainModelsApi,
+    field::FieldApi,
     model::ModelApi,
 };
 use color_eyre::eyre;
@@ -52,7 +54,7 @@ async fn main() -> Result<(), eyre::Error> {
     migrate!().run(&pool).await?;
 
     // Collect all the APIs into one
-    let apis = (Api, AuthApi, DomainApi, DomainModelsApi, ModelApi);
+    let apis = (Api, AuthApi, DomainApi, DomainModelsApi, ModelApi, FieldApi);
 
     // Setup OpenAPI Swagger Page
     // TODO - Remove raw API
