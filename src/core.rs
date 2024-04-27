@@ -1,9 +1,8 @@
 use crate::{
     db::{
         field_drop, field_drop_by_model, field_insert, field_select, field_select_by_model,
-        field_update, model_select_by_domain,
+        field_update,
     },
-    domain::{domain_read, Domain},
     model::{model_add, model_read, model_remove, Model, ModelParam},
     util::dbx_validater,
 };
@@ -15,24 +14,6 @@ use poem::{
 use poem_openapi::{Enum, Object};
 use sqlx::{FromRow, Postgres, Transaction, Type};
 use validator::{Validate, ValidationError};
-
-impl Domain {
-    /// Add model details to a domain
-    async fn add_models(
-        self,
-        tx: &mut Transaction<'_, Postgres>,
-    ) -> Result<DomainModels, poem::Error> {
-        // Pull models
-        let models = model_select_by_domain(tx, &self.name)
-            .await
-            .map_err(InternalServerError)?;
-
-        Ok(DomainModels {
-            domain: self,
-            models,
-        })
-    }
-}
 
 impl Model {
     /// Add fields details to a model
@@ -50,13 +31,6 @@ impl Model {
             fields,
         })
     }
-}
-
-/// Domain with models
-#[derive(Object)]
-pub struct DomainModels {
-    domain: Domain,
-    models: Vec<Model>,
 }
 
 /// Databrick Dataypes
@@ -219,17 +193,6 @@ pub struct FieldParamModelChild {
     pub precision: Option<i32>,
     pub scale: Option<i32>,
     pub extra: serde_json::Value,
-}
-
-/// Read details of a domain and add model details for that domain
-pub async fn domain_read_with_models(
-    tx: &mut Transaction<'_, Postgres>,
-    domain_name: &str,
-) -> Result<DomainModels, poem::Error> {
-    // Pull domain_models
-    let domain_models = domain_read(tx, domain_name).await?.add_models(tx).await?;
-
-    Ok(domain_models)
 }
 
 /// Add a model with fields
@@ -460,76 +423,6 @@ mod tests {
             validate_data_type(&DbxDataType::Decimal, &None, &None),
             Err(failed_check)
         );
-    }
-
-    /// Test Reading domain with models
-    #[sqlx::test]
-    async fn test_domain_read_with_models(pool: PgPool) {
-        // Domain to create
-        let body = gen_test_domain_json("test_domain");
-        post_test_domain(&body, &pool).await;
-
-        // Model to create
-        let body = gen_test_model_json("test_model1", "test_domain");
-        post_test_model(&body, &pool).await;
-
-        // Model to create
-        let body = gen_test_model_json("test_model2", "test_domain");
-        post_test_model(&body, &pool).await;
-
-        let domain_with_models = {
-            let mut tx = pool.begin().await.unwrap();
-            domain_read_with_models(&mut tx, "test_domain")
-                .await
-                .unwrap()
-        };
-
-        let domain = domain_with_models.domain;
-        let model1 = &domain_with_models.models[0];
-        let model2 = &domain_with_models.models[1];
-
-        assert_eq!(domain.id, 1);
-        assert_eq!(domain.name, "test_domain");
-        assert_eq!(domain.owner, "test_domain@test.com");
-        assert_eq!(
-            domain.extra,
-            json!({
-                "abc": 123,
-                "def": [1, 2, 3],
-            }),
-        );
-        assert_eq!(domain.created_by, "test_user");
-        assert_eq!(domain.modified_by, "test_user");
-
-        assert_eq!(model1.id, 1);
-        assert_eq!(model1.name, "test_model1");
-        assert_eq!(model1.domain_id, 1);
-        assert_eq!(model1.domain_name, "test_domain");
-        assert_eq!(model1.owner, "test_model1@test.com");
-        assert_eq!(
-            model1.extra,
-            json!({
-                "abc": 123,
-                "def": [1, 2, 3],
-            }),
-        );
-        assert_eq!(model1.created_by, "test_user");
-        assert_eq!(model1.modified_by, "test_user");
-
-        assert_eq!(model2.id, 2);
-        assert_eq!(model2.name, "test_model2");
-        assert_eq!(model2.domain_id, 1);
-        assert_eq!(model2.domain_name, "test_domain");
-        assert_eq!(model2.owner, "test_model2@test.com");
-        assert_eq!(
-            model2.extra,
-            json!({
-                "abc": 123,
-                "def": [1, 2, 3],
-            }),
-        );
-        assert_eq!(model2.created_by, "test_user");
-        assert_eq!(model2.modified_by, "test_user");
     }
 
     /// Test adding a model with fields

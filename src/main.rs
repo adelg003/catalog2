@@ -3,6 +3,7 @@ mod auth;
 mod core;
 mod db;
 mod domain;
+mod domain_models;
 mod model;
 mod util;
 
@@ -10,6 +11,7 @@ use crate::{
     api::Api,
     auth::{AuthApi, UserCred},
     domain::DomainApi,
+    domain_models::DomainModelsApi,
     model::ModelApi,
 };
 use color_eyre::eyre;
@@ -49,9 +51,12 @@ async fn main() -> Result<(), eyre::Error> {
     let pool = PgPool::connect(&conn_str).await?;
     migrate!().run(&pool).await?;
 
+    // Collect all the APIs into one
+    let apis = (Api, AuthApi, DomainApi, DomainModelsApi, ModelApi);
+
     // Setup OpenAPI Swagger Page
     // TODO - Remove raw API
-    let api_service = OpenApiService::new((Api, AuthApi, DomainApi, ModelApi), "Catalog2", "0.1.0")
+    let api_service = OpenApiService::new(apis, "Catalog2", "0.1.0")
         .server(format!("http://{}/api", web_addr_str));
     let spec = api_service.spec_endpoint();
     let swagger = api_service.swagger_ui();
