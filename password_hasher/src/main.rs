@@ -1,5 +1,5 @@
+use bcrypt::{hash, DEFAULT_COST};
 use clap::Parser;
-use bcrypt::{DEFAULT_COST, hash};
 use color_eyre::eyre;
 
 #[derive(Parser)]

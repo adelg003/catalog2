@@ -1,5 +1,6 @@
 use crate::{
     domain::domain_select,
+    field::{DbxDataType, Field},
     model::core::{Model, ModelParam},
 };
 use chrono::Utc;
@@ -224,15 +225,80 @@ pub async fn model_drop(
     Ok(model)
 }
 
+/// Pull many fields by model
+pub async fn field_select_by_model(
+    tx: &mut Transaction<'_, Postgres>,
+    model_name: &str,
+) -> Result<Vec<Field>, sqlx::Error> {
+    let fields = query_as!(
+        Field,
+        "SELECT
+            field.id,
+            field.name,
+            field.model_id,
+            model.name AS \"model_name\",
+            ROW_NUMBER() OVER (ORDER BY field.id) as \"seq\",
+            field.is_primary,
+            field.data_type AS \"data_type!: DbxDataType\",
+            field.is_nullable,
+            field.precision,
+            field.scale,
+            field.extra,
+            field.created_by,
+            field.created_date,
+            field.modified_by,
+            field.modified_date
+        FROM
+            field
+        LEFT JOIN
+            model
+        on
+            field.model_id = model.id 
+        WHERE
+            model.name = $1
+        ORDER BY
+            field.id",
+        model_name,
+    )
+    .fetch_all(&mut **tx)
+    .await?;
+
+    Ok(fields)
+}
+
+/// Delete all field for a model
+pub async fn field_drop_by_model(
+    tx: &mut Transaction<'_, Postgres>,
+    model_name: &str,
+) -> Result<Vec<Field>, sqlx::Error> {
+    // Pull the rows and parent
+    let model = model_select(tx, model_name).await?;
+    let fields = field_select_by_model(tx, model_name).await?;
+
+    // Now run the delete since we have the rows in memory
+    query!(
+        "DELETE FROM
+            field
+        WHERE
+            model_id = $1",
+        model.id,
+    )
+    .execute(&mut **tx)
+    .await?;
+
+    Ok(fields)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::{
-        model::util::test_utils::gen_test_model_parm,
+        model::util::test_utils::gen_test_model_param,
         util::test_utils::{
             gen_test_domain_json, gen_test_field_json, post_test_domain, post_test_field,
         },
     };
+    use pretty_assertions::assert_eq;
     use serde_json::json;
     use sqlx::PgPool;
 
@@ -244,7 +310,7 @@ mod tests {
         post_test_domain(&body, &pool).await;
 
         let model = {
-            let model_param = gen_test_model_parm("test_model", "test_domain");
+            let model_param = gen_test_model_param("test_model", "test_domain");
 
             let mut tx = pool.begin().await.unwrap();
 
@@ -275,7 +341,7 @@ mod tests {
     #[sqlx::test]
     async fn test_model_insert_not_found(pool: PgPool) {
         let err = {
-            let model_param = gen_test_model_parm("test_model", "test_domain");
+            let model_param = gen_test_model_param("test_model", "test_domain");
 
             let mut tx = pool.begin().await.unwrap();
             model_insert(&mut tx, &model_param, "test")
@@ -296,7 +362,7 @@ mod tests {
         let body = gen_test_domain_json("test_domain");
         post_test_domain(&body, &pool).await;
 
-        let model_param = gen_test_model_parm("test_model", "test_domain");
+        let model_param = gen_test_model_param("test_model", "test_domain");
 
         {
             let mut tx = pool.begin().await.unwrap();
@@ -331,7 +397,7 @@ mod tests {
         {
             let mut tx = pool.begin().await.unwrap();
 
-            let model_param = gen_test_model_parm("test_model", "test_domain");
+            let model_param = gen_test_model_param("test_model", "test_domain");
             model_insert(&mut tx, &model_param, "test").await.unwrap();
 
             tx.commit().await.unwrap();
@@ -386,13 +452,13 @@ mod tests {
         {
             let mut tx = pool.begin().await.unwrap();
 
-            let model_param = gen_test_model_parm("test_model", "test_domain");
+            let model_param = gen_test_model_param("test_model", "test_domain");
             model_insert(&mut tx, &model_param, "test").await.unwrap();
 
-            let model_param = gen_test_model_parm("test_model2", "test_domain");
+            let model_param = gen_test_model_param("test_model2", "test_domain");
             model_insert(&mut tx, &model_param, "test").await.unwrap();
 
-            let model_param = gen_test_model_parm("foobar_model", "foobar_domain");
+            let model_param = gen_test_model_param("foobar_model", "foobar_domain");
             model_insert(&mut tx, &model_param, "foobar").await.unwrap();
 
             tx.commit().await.unwrap();
@@ -559,14 +625,14 @@ mod tests {
         {
             let mut tx = pool.begin().await.unwrap();
 
-            let model_param = gen_test_model_parm("test_model", "test_domain");
+            let model_param = gen_test_model_param("test_model", "test_domain");
             model_insert(&mut tx, &model_param, "test").await.unwrap();
 
             tx.commit().await.unwrap();
         }
 
         let model = {
-            let model_param = gen_test_model_parm("foobar_model", "foobar_domain");
+            let model_param = gen_test_model_param("foobar_model", "foobar_domain");
 
             let mut tx = pool.begin().await.unwrap();
             model_update(&mut tx, "test_model", &model_param, "foobar")
@@ -598,7 +664,7 @@ mod tests {
         post_test_domain(&body, &pool).await;
 
         let err = {
-            let model_param = gen_test_model_parm("test_model", "test_domain");
+            let model_param = gen_test_model_param("test_model", "test_domain");
 
             let mut tx = pool.begin().await.unwrap();
             model_update(&mut tx, "test_model", &model_param, "test")
@@ -612,7 +678,7 @@ mod tests {
         };
 
         {
-            let model_param = gen_test_model_parm("test_model", "test_domain");
+            let model_param = gen_test_model_param("test_model", "test_domain");
 
             let mut tx = pool.begin().await.unwrap();
             model_insert(&mut tx, &model_param, "test").await.unwrap();
@@ -621,7 +687,7 @@ mod tests {
         }
 
         let err = {
-            let model_param = gen_test_model_parm("test_model", "foobar_domain");
+            let model_param = gen_test_model_param("test_model", "foobar_domain");
 
             let mut tx = pool.begin().await.unwrap();
             model_update(&mut tx, "test_model", &model_param, "foobar")
@@ -645,17 +711,17 @@ mod tests {
         {
             let mut tx = pool.begin().await.unwrap();
 
-            let model_param = gen_test_model_parm("test_model", "test_domain");
+            let model_param = gen_test_model_param("test_model", "test_domain");
             model_insert(&mut tx, &model_param, "test").await.unwrap();
 
-            let model_param = gen_test_model_parm("foobar_model", "test_domain");
+            let model_param = gen_test_model_param("foobar_model", "test_domain");
             model_insert(&mut tx, &model_param, "foobar").await.unwrap();
 
             tx.commit().await.unwrap();
         }
 
         let err = {
-            let model_param = gen_test_model_parm("foobar_model", "test_domain");
+            let model_param = gen_test_model_param("foobar_model", "test_domain");
 
             let mut tx = pool.begin().await.unwrap();
             model_update(&mut tx, "test_model", &model_param, "foobar")
@@ -682,7 +748,7 @@ mod tests {
         {
             let mut tx = pool.begin().await.unwrap();
 
-            let model_param = gen_test_model_parm("test_model", "test_domain");
+            let model_param = gen_test_model_param("test_model", "test_domain");
             model_insert(&mut tx, &model_param, "test").await.unwrap();
 
             tx.commit().await.unwrap();
@@ -744,10 +810,11 @@ mod tests {
         let body = gen_test_domain_json("test_domain");
         post_test_domain(&body, &pool).await;
 
+        // Model to create
         {
             let mut tx = pool.begin().await.unwrap();
 
-            let model_param = gen_test_model_parm("test_model", "test_domain");
+            let model_param = gen_test_model_param("test_model", "test_domain");
             model_insert(&mut tx, &model_param, "test").await.unwrap();
 
             tx.commit().await.unwrap();
@@ -767,6 +834,102 @@ mod tests {
                 "update or delete on table \"model\" violates foreign key constraint \"field_model_id_fkey\" on table \"field\"",
             ),
             err => panic!("Incorrect sqlx error type: {}", err),
+        };
+    }
+
+    /// Test field select by model
+    #[sqlx::test]
+    async fn test_field_select_by_model(pool: PgPool) {
+        {
+            let mut tx = pool.begin().await.unwrap();
+            let fields = field_select_by_model(&mut tx, "test_model").await.unwrap();
+
+            assert_eq!(fields.len(), 0);
+        }
+
+        // Domain to create
+        let body = gen_test_domain_json("test_domain");
+        post_test_domain(&body, &pool).await;
+
+        // Model to create
+        {
+            let mut tx = pool.begin().await.unwrap();
+
+            let model_param = gen_test_model_param("test_model", "test_domain");
+            model_insert(&mut tx, &model_param, "test").await.unwrap();
+
+            tx.commit().await.unwrap();
+        }
+
+        // Select Model with Fields
+        {
+            let mut tx = pool.begin().await.unwrap();
+
+            let fields = field_select_by_model(&mut tx, "test_model").await.unwrap();
+
+            assert_eq!(fields.len(), 0);
+        }
+
+        // Field to create
+        let body = gen_test_field_json("test_field1", "test_model");
+        post_test_field(&body, &pool).await;
+
+        // Field to create
+        let body = gen_test_field_json("test_field2", "test_model");
+        post_test_field(&body, &pool).await;
+
+        // Select Model with Fields
+        {
+            let mut tx = pool.begin().await.unwrap();
+            let fields = field_select_by_model(&mut tx, "test_model").await.unwrap();
+
+            assert_eq!(fields.len(), 2);
+        }
+    }
+
+    /// Test field drop by model
+    #[sqlx::test]
+    async fn test_field_drop_by_model(pool: PgPool) {
+        // Domain to create
+        let body = gen_test_domain_json("test_domain");
+        post_test_domain(&body, &pool).await;
+
+        // Model to create
+        {
+            let mut tx = pool.begin().await.unwrap();
+
+            let model_param = gen_test_model_param("test_model", "test_domain");
+            model_insert(&mut tx, &model_param, "test").await.unwrap();
+
+            tx.commit().await.unwrap();
+        }
+
+        // Field to create
+        let body = gen_test_field_json("test_field1", "test_model");
+        post_test_field(&body, &pool).await;
+
+        // Field to create
+        let body = gen_test_field_json("test_field2", "test_model");
+        post_test_field(&body, &pool).await;
+
+        // Delete Model with Fields
+        {
+            let mut tx = pool.begin().await.unwrap();
+            let fields = field_drop_by_model(&mut tx, "test_model").await.unwrap();
+
+            tx.commit().await.unwrap();
+
+            assert_eq!(fields.len(), 2);
+        };
+
+        // Delete Model with Fields, but none left
+        {
+            let mut tx = pool.begin().await.unwrap();
+            let fields = field_select_by_model(&mut tx, "test_model").await.unwrap();
+
+            tx.commit().await.unwrap();
+
+            assert_eq!(fields.len(), 0);
         };
     }
 }

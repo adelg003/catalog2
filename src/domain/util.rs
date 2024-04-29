@@ -4,7 +4,7 @@ pub mod test_utils {
     use serde_json::json;
 
     /// Create test domain
-    pub fn gen_test_domain_parm(name: &str) -> DomainParam {
+    pub fn gen_test_domain_param(name: &str) -> DomainParam {
         DomainParam {
             name: name.to_string(),
             owner: format!("{}@test.com", name),

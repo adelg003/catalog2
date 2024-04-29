@@ -9,13 +9,8 @@ pub enum Tag {
     Auth,
     //TODO Component,
     Domain,
-    #[oai(rename = "Domain With Models")]
-    DomainModels,
     Field,
     Model,
-    #[oai(rename = "Model With Fields")]
-    ModelFields,
-    Search,
 }
 
 /// Only allow for valid DBX name, meaning letters, number, dashes, and underscores. First

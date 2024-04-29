@@ -1,21 +1,17 @@
 mod auth;
 mod domain;
-mod domain_models;
 mod field;
 mod model;
-mod model_fields;
 mod util;
 
 use crate::{
     auth::{AuthApi, UserCred},
     domain::DomainApi,
-    domain_models::DomainModelsApi,
     field::FieldApi,
     model::ModelApi,
 };
 use color_eyre::eyre;
 use jsonwebtoken::{DecodingKey, EncodingKey};
-use model_fields::ModelFieldsApi;
 use poem::{listener::TcpListener, middleware::Tracing, EndpointExt, Route, Server};
 use poem_openapi::OpenApiService;
 use sqlx::{migrate, PgPool};
@@ -52,14 +48,7 @@ async fn main() -> Result<(), eyre::Error> {
     migrate!().run(&pool).await?;
 
     // Collect all the APIs into one
-    let apis = (
-        AuthApi,
-        DomainApi,
-        ModelApi,
-        FieldApi,
-        DomainModelsApi,
-        ModelFieldsApi,
-    );
+    let apis = (AuthApi, DomainApi, ModelApi, FieldApi);
 
     // Setup OpenAPI Swagger Page
     let api_service = OpenApiService::new(apis, "Catalog2", "0.1.0")

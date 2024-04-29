@@ -1,6 +1,6 @@
 use crate::{
-    util::Tag,
     auth::core::{make_jwt, Auth, TokenOrBasicAuth},
+    util::Tag,
 };
 use jsonwebtoken::EncodingKey;
 use poem::{error::InternalServerError, web::Data};

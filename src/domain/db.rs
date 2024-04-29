@@ -1,4 +1,7 @@
-use crate::domain::core::{Domain, DomainParam};
+use crate::{
+    domain::core::{Domain, DomainParam},
+    model::Model,
+};
 use chrono::Utc;
 use sqlx::{query_as, Postgres, QueryBuilder, Transaction};
 
@@ -211,11 +214,45 @@ pub async fn domain_drop(
     Ok(domain)
 }
 
+/// Pull many models by domain
+pub async fn model_select_by_domain(
+    tx: &mut Transaction<'_, Postgres>,
+    domain_name: &str,
+) -> Result<Vec<Model>, sqlx::Error> {
+    let model = query_as!(
+        Model,
+        "SELECT
+            model.id,
+            model.name,
+            model.domain_id,
+            domain.name AS \"domain_name\",
+            model.owner,
+            model.extra,
+            model.created_by,
+            model.created_date,
+            model.modified_by,
+            model.modified_date
+        FROM
+            model
+        LEFT JOIN
+            domain
+        on
+            model.domain_id = domain.id
+        WHERE
+            domain.name = $1",
+        domain_name,
+    )
+    .fetch_all(&mut **tx)
+    .await?;
+
+    Ok(model)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::{
-        domain::util::test_utils::gen_test_domain_parm,
+        domain::util::test_utils::gen_test_domain_param,
         util::test_utils::{gen_test_model_json, post_test_model},
     };
     use pretty_assertions::assert_eq;
@@ -226,7 +263,7 @@ mod tests {
     #[sqlx::test]
     async fn test_domain_insert(pool: PgPool) {
         let domain = {
-            let domain_param = gen_test_domain_parm("test_domain");
+            let domain_param = gen_test_domain_param("test_domain");
 
             let mut tx = pool.begin().await.unwrap();
             let domain = domain_insert(&mut tx, &domain_param, "test").await.unwrap();
@@ -253,7 +290,7 @@ mod tests {
     /// Test double domain create conflict
     #[sqlx::test]
     async fn test_domain_insert_conflict(pool: PgPool) {
-        let domain_param = gen_test_domain_parm("test_domain");
+        let domain_param = gen_test_domain_param("test_domain");
 
         {
             let mut tx = pool.begin().await.unwrap();
@@ -282,7 +319,7 @@ mod tests {
     #[sqlx::test]
     async fn test_domain_select(pool: PgPool) {
         {
-            let domain_param = gen_test_domain_parm("test_domain");
+            let domain_param = gen_test_domain_param("test_domain");
 
             let mut tx = pool.begin().await.unwrap();
             domain_insert(&mut tx, &domain_param, "test").await.unwrap();
@@ -329,10 +366,10 @@ mod tests {
         {
             let mut tx = pool.begin().await.unwrap();
 
-            let domain_param = gen_test_domain_parm("test_domain");
+            let domain_param = gen_test_domain_param("test_domain");
             domain_insert(&mut tx, &domain_param, "test").await.unwrap();
 
-            let domain_param = gen_test_domain_parm("foobar_domain");
+            let domain_param = gen_test_domain_param("foobar_domain");
             domain_insert(&mut tx, &domain_param, "foobar")
                 .await
                 .unwrap();
@@ -441,7 +478,7 @@ mod tests {
     #[sqlx::test]
     async fn test_domain_update(pool: PgPool) {
         {
-            let domain_param = gen_test_domain_parm("test_domain");
+            let domain_param = gen_test_domain_param("test_domain");
 
             let mut tx = pool.begin().await.unwrap();
             domain_insert(&mut tx, &domain_param, "test").await.unwrap();
@@ -450,7 +487,7 @@ mod tests {
         }
 
         let domain = {
-            let domain_param = gen_test_domain_parm("foobar_domain");
+            let domain_param = gen_test_domain_param("foobar_domain");
 
             let mut tx = pool.begin().await.unwrap();
             domain_update(&mut tx, "test_domain", &domain_param, "foobar")
@@ -476,7 +513,7 @@ mod tests {
     #[sqlx::test]
     async fn test_domain_update_not_found(pool: PgPool) {
         let err = {
-            let domain_param = gen_test_domain_parm("test_domain");
+            let domain_param = gen_test_domain_param("test_domain");
 
             let mut tx = pool.begin().await.unwrap();
             domain_update(&mut tx, "test_domain", &domain_param, "test")
@@ -496,10 +533,10 @@ mod tests {
         {
             let mut tx = pool.begin().await.unwrap();
 
-            let domain_param = gen_test_domain_parm("test_domain");
+            let domain_param = gen_test_domain_param("test_domain");
             domain_insert(&mut tx, &domain_param, "test").await.unwrap();
 
-            let domain_param = gen_test_domain_parm("foobar_domain");
+            let domain_param = gen_test_domain_param("foobar_domain");
             domain_insert(&mut tx, &domain_param, "foobar")
                 .await
                 .unwrap();
@@ -508,7 +545,7 @@ mod tests {
         }
 
         let err = {
-            let domain_param = gen_test_domain_parm("foobar_domain");
+            let domain_param = gen_test_domain_param("foobar_domain");
 
             let mut tx = pool.begin().await.unwrap();
             domain_update(&mut tx, "test_domain", &domain_param, "foobar")
@@ -529,7 +566,7 @@ mod tests {
     #[sqlx::test]
     async fn test_domain_drop(pool: PgPool) {
         {
-            let domain_param = gen_test_domain_parm("test_domain");
+            let domain_param = gen_test_domain_param("test_domain");
 
             let mut tx = pool.begin().await.unwrap();
             domain_insert(&mut tx, &domain_param, "test").await.unwrap();
@@ -590,7 +627,7 @@ mod tests {
         {
             let mut tx = pool.begin().await.unwrap();
 
-            let domain_param = gen_test_domain_parm("test_domain");
+            let domain_param = gen_test_domain_param("test_domain");
             domain_insert(&mut tx, &domain_param, "test").await.unwrap();
 
             tx.commit().await.unwrap();
@@ -611,5 +648,52 @@ mod tests {
             ),
             err => panic!("Incorrect sqlx error type: {}", err),
         };
+    }
+
+    /// Test model select by domain
+    #[sqlx::test]
+    async fn test_model_select_by_domain(pool: PgPool) {
+        {
+            let mut tx = pool.begin().await.unwrap();
+            let models = model_select_by_domain(&mut tx, "test_domain")
+                .await
+                .unwrap();
+
+            assert_eq!(models.len(), 0);
+        }
+
+        // Domain to create
+        {
+            let mut tx = pool.begin().await.unwrap();
+
+            let domain_param = gen_test_domain_param("test_domain");
+            domain_insert(&mut tx, &domain_param, "test").await.unwrap();
+
+            tx.commit().await.unwrap();
+        }
+
+        {
+            let mut tx = pool.begin().await.unwrap();
+            let models = model_select_by_domain(&mut tx, "test_domain")
+                .await
+                .unwrap();
+
+            assert_eq!(models.len(), 0);
+        }
+
+        let body = gen_test_model_json("test_model", "test_domain");
+        post_test_model(&body, &pool).await;
+
+        let body = gen_test_model_json("test_model2", "test_domain");
+        post_test_model(&body, &pool).await;
+
+        {
+            let mut tx = pool.begin().await.unwrap();
+            let models = model_select_by_domain(&mut tx, "test_domain")
+                .await
+                .unwrap();
+
+            assert_eq!(models.len(), 2);
+        }
     }
 }
