@@ -7,10 +7,15 @@ pub const PAGE_SIZE: u64 = 50;
 #[derive(Tags)]
 pub enum Tag {
     Auth,
-    //TODO Component,
     Domain,
+    #[oai(rename = "Domain with Children")]
+    DomainWithChildren,
     Field,
     Model,
+    #[oai(rename = "Model with Fields")]
+    ModelWithFields,
+    Search,
+    Pack,
 }
 
 /// Only allow for valid DBX name, meaning letters, number, dashes, and underscores. First
@@ -47,6 +52,7 @@ pub mod test_utils {
         domain::DomainApi,
         field::FieldApi,
         model::ModelApi,
+        pack::PackApi,
     };
     use jsonwebtoken::{DecodingKey, EncodingKey};
     use poem::{test::TestClient, web::headers::Authorization};
@@ -206,6 +212,47 @@ pub mod test_utils {
         // Create Domain
         let response = cli
             .post("/field")
+            .header("X-API-Key", &token)
+            .header("Content-Type", "application/json; charset=utf-8")
+            .body_json(body)
+            .data(decoding_key)
+            .data(user_creds)
+            .data(pool.clone())
+            .send()
+            .await;
+
+        response.assert_status_is_ok();
+    }
+
+    /// Create test pack JSON
+    pub fn gen_test_pack_json(name: &str, domain_name: &str) -> serde_json::Value {
+        json!({
+            "name": name,
+            "domain_name": domain_name,
+            "runtime": "docker",
+            "compute": "dbx",
+            "repo": "http://test.repo.org",
+            "owner": format!("{}@test.com", name),
+            "extra": {
+                "abc": 123,
+                "def": [1, 2, 3],
+            },
+        })
+    }
+
+    /// Create a test pack
+    pub async fn post_test_pack(body: &serde_json::Value, pool: &PgPool) {
+        // Test JWT keys and User Creds
+        let user_creds = gen_test_user_creds("test_user");
+        let (token, _, decoding_key) = gen_jwt_encode_decode_token(&user_creds).await;
+
+        // Test Client
+        let ep = OpenApiService::new(PackApi, "test", "1.0");
+        let cli = TestClient::new(ep);
+
+        // Create Domain
+        let response = cli
+            .post("/pack")
             .header("X-API-Key", &token)
             .header("Content-Type", "application/json; charset=utf-8")
             .body_json(body)

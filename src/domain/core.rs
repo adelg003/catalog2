@@ -1,9 +1,10 @@
 use crate::{
     domain::db::{
         domain_drop, domain_insert, domain_select, domain_select_search, domain_update,
-        model_select_by_domain,
+        model_select_by_domain, pack_select_by_domain,
     },
     model::Model,
+    pack::Pack,
     util::{dbx_validater, PAGE_SIZE},
 };
 use chrono::{DateTime, Utc};
@@ -47,11 +48,19 @@ pub struct DomainSearch {
     more: bool,
 }
 
-/// Domain with models
+/// Params for searching for domains
+pub struct DomainSearchParam {
+    pub domain_name: Option<String>,
+    pub owner: Option<String>,
+    pub extra: Option<String>,
+}
+
+/// Domain with models and packs
 #[derive(Object)]
-pub struct DomainModels {
+pub struct DomainChildren {
     domain: Domain,
     models: Vec<Model>,
+    packs: Vec<Pack>,
 }
 
 /// Add a domain
@@ -85,9 +94,7 @@ pub async fn domain_read(
 /// Read details of many domains
 pub async fn domain_read_search(
     tx: &mut Transaction<'_, Postgres>,
-    domain_name: &Option<String>,
-    owner: &Option<String>,
-    extra: &Option<String>,
+    search_param: &DomainSearchParam,
     page: &u64,
 ) -> Result<DomainSearch, poem::Error> {
     // Compute offset
@@ -95,28 +102,14 @@ pub async fn domain_read_search(
     let next_offset = (page + 1) * PAGE_SIZE;
 
     // Pull the Domains
-    let domains = domain_select_search(
-        tx,
-        domain_name,
-        owner,
-        extra,
-        &Some(PAGE_SIZE),
-        &Some(offset),
-    )
-    .await
-    .map_err(InternalServerError)?;
+    let domains = domain_select_search(tx, search_param, &Some(PAGE_SIZE), &Some(offset))
+        .await
+        .map_err(InternalServerError)?;
 
     // More domains present?
-    let next_domain = domain_select_search(
-        tx,
-        domain_name,
-        owner,
-        extra,
-        &Some(PAGE_SIZE),
-        &Some(next_offset),
-    )
-    .await
-    .map_err(InternalServerError)?;
+    let next_domain = domain_select_search(tx, search_param, &Some(PAGE_SIZE), &Some(next_offset))
+        .await
+        .map_err(InternalServerError)?;
 
     let more = !next_domain.is_empty();
 
@@ -158,7 +151,6 @@ pub async fn domain_edit(
 pub async fn domain_remove(
     tx: &mut Transaction<'_, Postgres>,
     domain_name: &str,
-    //cascade: &bool,
 ) -> Result<Domain, poem::Error> {
     // Delete the domain
     let delete = domain_drop(tx, domain_name).await;
@@ -178,10 +170,10 @@ pub async fn domain_remove(
 }
 
 /// Read details of a domain and add model details for that domain
-pub async fn domain_read_with_models(
+pub async fn domain_read_with_children(
     tx: &mut Transaction<'_, Postgres>,
     domain_name: &str,
-) -> Result<DomainModels, poem::Error> {
+) -> Result<DomainChildren, poem::Error> {
     // Pull domain
     let domain = domain_read(tx, domain_name).await?;
 
@@ -190,7 +182,16 @@ pub async fn domain_read_with_models(
         .await
         .map_err(InternalServerError)?;
 
-    Ok(DomainModels { domain, models })
+    // Pull Packs
+    let packs = pack_select_by_domain(tx, &domain.name)
+        .await
+        .map_err(InternalServerError)?;
+
+    Ok(DomainChildren {
+        domain,
+        models,
+        packs,
+    })
 }
 
 #[cfg(test)]
@@ -198,7 +199,10 @@ mod tests {
     use super::*;
     use crate::{
         domain::util::test_utils::gen_test_domain_param,
-        util::test_utils::{gen_test_model_json, post_test_model},
+        pack::{ComputeType, RuntimeType},
+        util::test_utils::{
+            gen_test_model_json, gen_test_pack_json, post_test_model, post_test_pack,
+        },
     };
     use pretty_assertions::assert_eq;
     use serde_json::json;
@@ -325,7 +329,14 @@ mod tests {
 
         {
             let mut tx = pool.begin().await.unwrap();
-            let search = domain_read_search(&mut tx, &None, &None, &None, &0)
+
+            let search_param = DomainSearchParam {
+                domain_name: None,
+                owner: None,
+                extra: None,
+            };
+
+            let search = domain_read_search(&mut tx, &search_param, &0)
                 .await
                 .unwrap();
 
@@ -336,7 +347,14 @@ mod tests {
 
         {
             let mut tx = pool.begin().await.unwrap();
-            let search = domain_read_search(&mut tx, &None, &None, &None, &1)
+
+            let search_param = DomainSearchParam {
+                domain_name: None,
+                owner: None,
+                extra: None,
+            };
+
+            let search = domain_read_search(&mut tx, &search_param, &1)
                 .await
                 .unwrap();
 
@@ -347,7 +365,14 @@ mod tests {
 
         {
             let mut tx = pool.begin().await.unwrap();
-            let search = domain_read_search(&mut tx, &Some("abcdef".to_string()), &None, &None, &0)
+
+            let search_param = DomainSearchParam {
+                domain_name: Some("abcdef".to_string()),
+                owner: None,
+                extra: None,
+            };
+
+            let search = domain_read_search(&mut tx, &search_param, &0)
                 .await
                 .unwrap();
 
@@ -358,7 +383,14 @@ mod tests {
 
         {
             let mut tx = pool.begin().await.unwrap();
-            let search = domain_read_search(&mut tx, &Some("foobar".to_string()), &None, &None, &0)
+
+            let search_param = DomainSearchParam {
+                domain_name: Some("foobar".to_string()),
+                owner: None,
+                extra: None,
+            };
+
+            let search = domain_read_search(&mut tx, &search_param, &0)
                 .await
                 .unwrap();
 
@@ -368,15 +400,16 @@ mod tests {
 
         {
             let mut tx = pool.begin().await.unwrap();
-            let search = domain_read_search(
-                &mut tx,
-                &Some("foobar".to_string()),
-                &Some("test.com".to_string()),
-                &None,
-                &0,
-            )
-            .await
-            .unwrap();
+
+            let search_param = DomainSearchParam {
+                domain_name: Some("foobar".to_string()),
+                owner: Some("test.com".to_string()),
+                extra: None,
+            };
+
+            let search = domain_read_search(&mut tx, &search_param, &0)
+                .await
+                .unwrap();
 
             assert_eq!(search.domains.len(), 1);
             assert_eq!(search.domains[0].name, "foobar_domain");
@@ -386,15 +419,16 @@ mod tests {
 
         {
             let mut tx = pool.begin().await.unwrap();
-            let search = domain_read_search(
-                &mut tx,
-                &Some("foobar".to_string()),
-                &Some("test.com".to_string()),
-                &Some("abc".to_string()),
-                &0,
-            )
-            .await
-            .unwrap();
+
+            let search_param = DomainSearchParam {
+                domain_name: Some("foobar".to_string()),
+                owner: Some("test.com".to_string()),
+                extra: Some("abc".to_string()),
+            };
+
+            let search = domain_read_search(&mut tx, &search_param, &0)
+                .await
+                .unwrap();
 
             assert_eq!(search.domains.len(), 1);
             assert_eq!(search.domains[0].name, "foobar_domain");
@@ -572,9 +606,9 @@ mod tests {
         );
     }
 
-    /// Test Reading domain with models
+    /// Test Reading domain with models and packs
     #[sqlx::test]
-    async fn test_domain_read_with_models(pool: PgPool) {
+    async fn test_domain_read_with_children(pool: PgPool) {
         // Domain Creation
         {
             let mut tx = pool.begin().await.unwrap();
@@ -595,16 +629,26 @@ mod tests {
         let body = gen_test_model_json("test_model2", "test_domain");
         post_test_model(&body, &pool).await;
 
-        let domain_with_models = {
+        // Pack to create
+        let body = gen_test_pack_json("test_pack1", "test_domain");
+        post_test_pack(&body, &pool).await;
+
+        // Pack to create
+        let body = gen_test_pack_json("test_pack2", "test_domain");
+        post_test_pack(&body, &pool).await;
+
+        let domain_with_children = {
             let mut tx = pool.begin().await.unwrap();
-            domain_read_with_models(&mut tx, "test_domain")
+            domain_read_with_children(&mut tx, "test_domain")
                 .await
                 .unwrap()
         };
 
-        let domain = domain_with_models.domain;
-        let model1 = &domain_with_models.models[0];
-        let model2 = &domain_with_models.models[1];
+        let domain = domain_with_children.domain;
+        let model1 = &domain_with_children.models[0];
+        let model2 = &domain_with_children.models[1];
+        let pack1 = &domain_with_children.packs[0];
+        let pack2 = &domain_with_children.packs[1];
 
         assert_eq!(domain.id, 1);
         assert_eq!(domain.name, "test_domain");
@@ -648,5 +692,48 @@ mod tests {
         );
         assert_eq!(model2.created_by, "test_user");
         assert_eq!(model2.modified_by, "test_user");
+
+        assert_eq!(pack1.id, 1);
+        assert_eq!(pack1.name, "test_pack1");
+        assert_eq!(pack1.domain_id, 1);
+        assert_eq!(pack1.domain_name, "test_domain");
+        assert_eq!(pack1.runtime, RuntimeType::Docker);
+        assert_eq!(pack1.compute, ComputeType::Dbx);
+        assert_eq!(pack1.repo, "http://test.repo.org");
+        assert_eq!(pack1.owner, "test_pack1@test.com");
+        assert_eq!(
+            pack1.extra,
+            json!({
+                "abc": 123,
+                "def": [1, 2, 3],
+            }),
+        );
+        assert_eq!(pack1.created_by, "test_user");
+        assert_eq!(pack1.modified_by, "test_user");
+
+        assert_eq!(pack2.id, 2);
+        assert_eq!(pack2.name, "test_pack2");
+        assert_eq!(pack2.domain_id, 1);
+        assert_eq!(pack2.domain_name, "test_domain");
+        assert_eq!(pack2.runtime, RuntimeType::Docker);
+        assert_eq!(pack2.compute, ComputeType::Dbx);
+        assert_eq!(pack2.repo, "http://test.repo.org");
+        assert_eq!(pack2.owner, "test_pack2@test.com");
+        assert_eq!(
+            pack2.extra,
+            json!({
+                "abc": 123,
+                "def": [1, 2, 3],
+            }),
+        );
+        assert_eq!(pack2.created_by, "test_user");
+        assert_eq!(pack2.modified_by, "test_user");
+    }
+
+    /// Test Reading domain with packs
+    #[test]
+    #[should_panic]
+    fn test_domain_read_with_packs() {
+        todo!();
     }
 }

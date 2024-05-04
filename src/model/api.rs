@@ -3,7 +3,7 @@ use crate::{
     model::core::{
         model_add, model_add_with_fields, model_edit, model_read, model_read_search,
         model_read_with_fields, model_remove, model_remove_with_fields, Model, ModelFields,
-        ModelFieldsParam, ModelParam, ModelSearch,
+        ModelFieldsParam, ModelParam, ModelSearch, ModelSearchParam,
     },
     util::Tag,
 };
@@ -104,7 +104,7 @@ impl ModelApi {
     }
 
     /// Search models
-    #[oai(path = "/search/model", method = "get", tag = Tag::Model)]
+    #[oai(path = "/search/model", method = "get", tag = Tag::Search)]
     async fn model_get_search(
         &self,
         Data(pool): Data<&PgPool>,
@@ -117,18 +117,25 @@ impl ModelApi {
         // Default no page to 0
         let page = page.unwrap_or(0);
 
+        // Search Params
+        let search_param = ModelSearchParam {
+            model_name,
+            domain_name,
+            owner,
+            extra,
+        };
+
         // Start Transaction
         let mut tx = pool.begin().await.map_err(InternalServerError)?;
 
         // Pull models
-        let model_search =
-            model_read_search(&mut tx, &model_name, &domain_name, &owner, &extra, &page).await?;
+        let model_search = model_read_search(&mut tx, &search_param, &page).await?;
 
         Ok(Json(model_search))
     }
 
     /// Add a model to the model table
-    #[oai(path = "/model_with_fields", method = "post", tag = Tag::Model)]
+    #[oai(path = "/model_with_fields", method = "post", tag = Tag::ModelWithFields)]
     async fn model_post_with_fields(
         &self,
         auth: TokenAuth,
@@ -151,7 +158,7 @@ impl ModelApi {
     }
 
     /// Get a single model and its fields
-    #[oai(path = "/model_with_fields/:model_name", method = "get", tag = Tag::Model)]
+    #[oai(path = "/model_with_fields/:model_name", method = "get", tag = Tag::ModelWithFields)]
     async fn model_get_with_fields(
         &self,
         Data(pool): Data<&PgPool>,
@@ -167,7 +174,7 @@ impl ModelApi {
     }
 
     /// Delete a model and it s fields
-    #[oai(path = "/model_with_fields/:model_name", method = "delete", tag = Tag::Model)]
+    #[oai(path = "/model_with_fields/:model_name", method = "delete", tag = Tag::ModelWithFields)]
     async fn model_delete_with_fields(
         &self,
         _auth: TokenAuth,

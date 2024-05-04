@@ -1,4 +1,6 @@
 -- Add up migration script here
+
+-- Domain Table
 CREATE TABLE domain (
   id SERIAL PRIMARY KEY,
   name TEXT NOT NULL UNIQUE,
@@ -10,6 +12,7 @@ CREATE TABLE domain (
   modified_date TIMESTAMPTZ NOT NULL
 );
 
+-- Model Table
 CREATE TABLE model (
   id SERIAL PRIMARY KEY,
   name TEXT NOT NULL UNIQUE,
@@ -44,6 +47,7 @@ CREATE TYPE dbx_data_type AS ENUM (
   'tinyint'
 );
 
+-- Fields that make up a Model
 CREATE TABLE field (
   id SERIAL PRIMARY KEY,
   name TEXT NOT NULL,
@@ -60,4 +64,66 @@ CREATE TABLE field (
   modified_date TIMESTAMPTZ NOT NULL,
   UNIQUE (model_id, name),
   FOREIGN KEY(model_id) REFERENCES model(id)
+);
+
+-- Where the pack runs?
+CREATE TYPE runtime_type AS ENUM (
+  'docker',
+  'dbxjob',
+  'dbt',
+  'dag'
+);
+
+-- What compute does the pack use?
+CREATE TYPE compute_type AS ENUM (
+  'docker',
+  'dbx',
+  'memsql'
+);
+
+-- Compute Pack to be run to create the needed Models
+CREATE TABLE pack (
+  id SERIAL PRIMARY KEY,
+  name TEXT NOT NULL UNIQUE,
+  domain_id INTEGER NOT NULL,
+  runtime runtime_type NOT NULL,
+  compute compute_type NOT NULL,
+  repo TEXT NOT NULL,
+  owner TEXT NOT NULL,
+  extra JSONB,
+  created_by TEXT NOT NULL,
+  created_date TIMESTAMPTZ NOT NULL,
+  modified_by TEXT NOT NULL,
+  modified_date TIMESTAMPTZ NOT NULL,
+  FOREIGN KEY(domain_id) REFERENCES domain(id)
+);
+
+-- Models needed to run the pack
+CREATE TABLE pack_dependencies (
+  id SERIAL PRIMARY KEY,
+  pack_id INTEGER NOT NULL,
+  model_id INTEGER NOT NULL,
+  extra JSONB,
+  created_by TEXT NOT NULL,
+  created_date TIMESTAMPTZ NOT NULL,
+  modified_by TEXT NOT NULL,
+  modified_date TIMESTAMPTZ NOT NULL,
+  UNIQUE (model_id, pack_id),
+  FOREIGN KEY(pack_id) REFERENCES pack(id),
+  FOREIGN KEY(model_id) REFERENCES model(id)
+);
+
+-- Pack needed to create a model
+CREATE TABLE model_dependencies (
+  id SERIAL PRIMARY KEY,
+  model_id INTEGER NOT NULL UNIQUE,
+  pack_id INTEGER NOT NULL,
+  extra JSONB,
+  created_by TEXT NOT NULL,
+  created_date TIMESTAMPTZ NOT NULL,
+  modified_by TEXT NOT NULL,
+  modified_date TIMESTAMPTZ NOT NULL,
+  UNIQUE (model_id, pack_id),
+  FOREIGN KEY(model_id) REFERENCES model(id),
+  FOREIGN KEY(pack_id) REFERENCES pack(id)
 );

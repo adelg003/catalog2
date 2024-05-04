@@ -1,6 +1,7 @@
 use crate::{
-    domain::core::{Domain, DomainParam},
+    domain::core::{Domain, DomainParam, DomainSearchParam},
     model::Model,
+    pack::{ComputeType, Pack, RuntimeType},
 };
 use chrono::Utc;
 use sqlx::{query_as, Postgres, QueryBuilder, Transaction};
@@ -83,9 +84,7 @@ pub async fn domain_select(
 /// Pull multiple domains that match the criteria
 pub async fn domain_select_search(
     tx: &mut Transaction<'_, Postgres>,
-    domain_name: &Option<String>,
-    owner: &Option<String>,
-    extra: &Option<String>,
+    search_param: &DomainSearchParam,
     limit: &Option<u64>,
     offset: &Option<u64>,
 ) -> Result<Vec<Domain>, sqlx::Error> {
@@ -105,20 +104,23 @@ pub async fn domain_select_search(
     );
 
     // Should we add a WHERE statement?
-    if domain_name.is_some() || owner.is_some() || extra.is_some() {
+    if search_param.domain_name.is_some()
+        || search_param.owner.is_some()
+        || search_param.extra.is_some()
+    {
         query.push(" WHERE ");
 
         // Start building the WHERE statement with the "AND" separating the condition.
         let mut separated = query.separated(" AND ");
 
         // Fuzzy search
-        if let Some(domain_name) = domain_name {
+        if let Some(domain_name) = &search_param.domain_name {
             separated.push(format!("name ILIKE '%{}%'", domain_name));
         }
-        if let Some(owner) = owner {
+        if let Some(owner) = &search_param.owner {
             separated.push(format!("owner ILIKE '%{}%'", owner));
         }
-        if let Some(extra) = extra {
+        if let Some(extra) = &search_param.extra {
             separated.push(format!("extra::text ILIKE '%{}%'", extra));
         }
     }
@@ -246,6 +248,43 @@ pub async fn model_select_by_domain(
     .await?;
 
     Ok(model)
+}
+
+/// Pull many packs by domain
+pub async fn pack_select_by_domain(
+    tx: &mut Transaction<'_, Postgres>,
+    domain_name: &str,
+) -> Result<Vec<Pack>, sqlx::Error> {
+    let pack = query_as!(
+        Pack,
+        "SELECT
+            pack.id,
+            pack.name,
+            pack.domain_id,
+            domain.name AS \"domain_name\",
+            pack.runtime AS \"runtime!: RuntimeType\",
+            pack.compute AS \"compute!: ComputeType\",
+            pack.repo,
+            pack.owner,
+            pack.extra,
+            pack.created_by,
+            pack.created_date,
+            pack.modified_by,
+            pack.modified_date
+        FROM
+            pack
+        LEFT JOIN
+            domain
+        on
+            pack.domain_id = domain.id 
+        WHERE
+            domain.name = $1",
+        domain_name,
+    )
+    .fetch_all(&mut **tx)
+    .await?;
+
+    Ok(pack)
 }
 
 #[cfg(test)]
@@ -379,7 +418,14 @@ mod tests {
 
         {
             let mut tx = pool.begin().await.unwrap();
-            let domains = domain_select_search(&mut tx, &None, &None, &None, &None, &None)
+
+            let search_param = DomainSearchParam {
+                domain_name: None,
+                owner: None,
+                extra: None,
+            };
+
+            let domains = domain_select_search(&mut tx, &search_param, &None, &None)
                 .await
                 .unwrap();
 
@@ -388,74 +434,30 @@ mod tests {
 
         {
             let mut tx = pool.begin().await.unwrap();
-            let domains = domain_select_search(
-                &mut tx,
-                &Some("abcdef".to_string()),
-                &None,
-                &None,
-                &None,
-                &None,
-            )
-            .await
-            .unwrap();
+
+            let search_param = DomainSearchParam {
+                domain_name: Some("abcdef".to_string()),
+                owner: None,
+                extra: None,
+            };
+
+            let domains = domain_select_search(&mut tx, &search_param, &None, &None)
+                .await
+                .unwrap();
 
             assert_eq!(domains.len(), 0);
         }
 
         {
             let mut tx = pool.begin().await.unwrap();
-            let domains = domain_select_search(
-                &mut tx,
-                &Some("test".to_string()),
-                &None,
-                &None,
-                &None,
-                &None,
-            )
-            .await
-            .unwrap();
 
-            assert_eq!(domains.len(), 1);
-            assert_eq!(domains[0].name, "test_domain");
-        }
+            let search_param = DomainSearchParam {
+                domain_name: Some("test".to_string()),
+                owner: None,
+                extra: None,
+            };
 
-        {
-            let mut tx = pool.begin().await.unwrap();
-            let domains = domain_select_search(
-                &mut tx,
-                &Some("test".to_string()),
-                &Some("test.com".to_string()),
-                &None,
-                &None,
-                &None,
-            )
-            .await
-            .unwrap();
-
-            assert_eq!(domains.len(), 1);
-            assert_eq!(domains[0].name, "test_domain");
-        }
-
-        {
-            let mut tx = pool.begin().await.unwrap();
-            let domains = domain_select_search(
-                &mut tx,
-                &Some("test".to_string()),
-                &Some("test.com".to_string()),
-                &Some("abc".to_string()),
-                &None,
-                &None,
-            )
-            .await
-            .unwrap();
-
-            assert_eq!(domains.len(), 1);
-            assert_eq!(domains[0].name, "test_domain");
-        }
-
-        {
-            let mut tx = pool.begin().await.unwrap();
-            let domains = domain_select_search(&mut tx, &None, &None, &None, &Some(1), &None)
+            let domains = domain_select_search(&mut tx, &search_param, &None, &None)
                 .await
                 .unwrap();
 
@@ -465,7 +467,65 @@ mod tests {
 
         {
             let mut tx = pool.begin().await.unwrap();
-            let domains = domain_select_search(&mut tx, &None, &None, &None, &Some(1), &Some(1))
+
+            let search_param = DomainSearchParam {
+                domain_name: Some("test".to_string()),
+                owner: Some("test.com".to_string()),
+                extra: None,
+            };
+
+            let domains = domain_select_search(&mut tx, &search_param, &None, &None)
+                .await
+                .unwrap();
+
+            assert_eq!(domains.len(), 1);
+            assert_eq!(domains[0].name, "test_domain");
+        }
+
+        {
+            let mut tx = pool.begin().await.unwrap();
+
+            let search_param = DomainSearchParam {
+                domain_name: Some("test".to_string()),
+                owner: Some("test.com".to_string()),
+                extra: Some("abc".to_string()),
+            };
+
+            let domains = domain_select_search(&mut tx, &search_param, &None, &None)
+                .await
+                .unwrap();
+
+            assert_eq!(domains.len(), 1);
+            assert_eq!(domains[0].name, "test_domain");
+        }
+
+        {
+            let mut tx = pool.begin().await.unwrap();
+
+            let search_param = DomainSearchParam {
+                domain_name: None,
+                owner: None,
+                extra: None,
+            };
+
+            let domains = domain_select_search(&mut tx, &search_param, &Some(1), &None)
+                .await
+                .unwrap();
+
+            assert_eq!(domains.len(), 1);
+            assert_eq!(domains[0].name, "test_domain");
+        }
+
+        {
+            let mut tx = pool.begin().await.unwrap();
+
+            let search_param = DomainSearchParam {
+                domain_name: None,
+                owner: None,
+                extra: None,
+            };
+
+            let domains = domain_select_search(&mut tx, &search_param, &Some(1), &Some(1))
                 .await
                 .unwrap();
 
@@ -695,5 +755,12 @@ mod tests {
 
             assert_eq!(models.len(), 2);
         }
+    }
+
+    /// Test pack select by domain
+    #[test]
+    #[should_panic]
+    fn test_pack_select_by_domain() {
+        todo!();
     }
 }

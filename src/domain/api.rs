@@ -1,8 +1,8 @@
 use crate::{
     auth::{Auth, TokenAuth},
     domain::core::{
-        domain_add, domain_edit, domain_read, domain_read_search, domain_read_with_models,
-        domain_remove, Domain, DomainModels, DomainParam, DomainSearch,
+        domain_add, domain_edit, domain_read, domain_read_search, domain_read_with_children,
+        domain_remove, Domain, DomainChildren, DomainParam, DomainSearch, DomainSearchParam,
     },
     util::Tag,
 };
@@ -103,7 +103,7 @@ impl DomainApi {
     }
 
     /// Search domains
-    #[oai(path = "/search/domain", method = "get", tag = Tag::Domain)]
+    #[oai(path = "/search/domain", method = "get", tag = Tag::Search)]
     async fn domain_get_search(
         &self,
         Data(pool): Data<&PgPool>,
@@ -115,28 +115,34 @@ impl DomainApi {
         // Default no page to 0
         let page = page.unwrap_or(0);
 
+        // Search Params
+        let search_param = DomainSearchParam {
+            domain_name,
+            owner,
+            extra,
+        };
+
         // Start Transaction
         let mut tx = pool.begin().await.map_err(InternalServerError)?;
 
         // Pull domain
-        let domain_search =
-            domain_read_search(&mut tx, &domain_name, &owner, &extra, &page).await?;
+        let domain_search = domain_read_search(&mut tx, &search_param, &page).await?;
 
         Ok(Json(domain_search))
     }
 
     /// Get a single domain and its models
-    #[oai(path = "/domain_with_models/:domain_name", method = "get", tag = Tag::Domain)]
-    async fn domain_get_with_models(
+    #[oai(path = "/domain_with_children/:domain_name", method = "get", tag = Tag::DomainWithChildren)]
+    async fn domain_get_with_children(
         &self,
         Data(pool): Data<&PgPool>,
         Path(domain_name): Path<String>,
-    ) -> Result<Json<DomainModels>, poem::Error> {
+    ) -> Result<Json<DomainChildren>, poem::Error> {
         // Start Transaction
         let mut tx = pool.begin().await.map_err(InternalServerError)?;
 
         // Pull domain
-        let domain = domain_read_with_models(&mut tx, &domain_name).await?;
+        let domain = domain_read_with_children(&mut tx, &domain_name).await?;
 
         Ok(Json(domain))
     }
@@ -146,8 +152,8 @@ impl DomainApi {
 mod tests {
     use super::*;
     use crate::util::test_utils::{
-        gen_jwt_encode_decode_token, gen_test_domain_json, gen_test_model_json,
-        gen_test_user_creds, post_test_domain, post_test_model,
+        gen_jwt_encode_decode_token, gen_test_domain_json, gen_test_model_json, gen_test_pack_json,
+        gen_test_user_creds, post_test_domain, post_test_model, post_test_pack,
     };
     use poem::{http::StatusCode, test::TestClient};
     use poem_openapi::OpenApiService;
@@ -749,7 +755,7 @@ mod tests {
 
     /// Test Reading domain with models
     #[sqlx::test]
-    async fn test_domain_get_with_models(pool: PgPool) {
+    async fn test_domain_get_with_children(pool: PgPool) {
         // Domain to create
         let body = gen_test_domain_json("test_domain");
         post_test_domain(&body, &pool).await;
@@ -762,6 +768,14 @@ mod tests {
         let body = gen_test_model_json("test_model2", "test_domain");
         post_test_model(&body, &pool).await;
 
+        // Pack to create
+        let body = gen_test_pack_json("test_pack1", "test_domain");
+        post_test_pack(&body, &pool).await;
+
+        // Pack to create
+        let body = gen_test_pack_json("test_pack2", "test_domain");
+        post_test_pack(&body, &pool).await;
+
         // Test JWT keys and User Creds
         let user_creds = gen_test_user_creds("test_user");
         let (token, _, decoding_key) = gen_jwt_encode_decode_token(&user_creds).await;
@@ -772,7 +786,7 @@ mod tests {
 
         // Get existing record
         let response = cli
-            .get("/domain_with_models/test_domain")
+            .get("/domain_with_children/test_domain")
             .header("X-API-Key", &token)
             .header("Content-Type", "application/json; charset=utf-8")
             .data(decoding_key)
@@ -791,6 +805,8 @@ mod tests {
         let domain_json = json_value.object().get("domain");
         let model1_json = json_value.object().get("models").array().get(0);
         let model2_json = json_value.object().get("models").array().get(1);
+        let pack1_json = json_value.object().get("packs").array().get(0);
+        let pack2_json = json_value.object().get("packs").array().get(1);
 
         domain_json.object().get("id").assert_i64(1);
         domain_json
@@ -888,6 +904,82 @@ mod tests {
             .get("created_by")
             .assert_string("test_user");
         model2_json
+            .object()
+            .get("modified_by")
+            .assert_string("test_user");
+
+        pack1_json.object().get("id").assert_i64(1);
+        pack1_json.object().get("name").assert_string("test_pack1");
+        pack1_json.object().get("domain_id").assert_i64(1);
+        pack1_json
+            .object()
+            .get("domain_name")
+            .assert_string("test_domain");
+        pack1_json.object().get("runtime").assert_string("docker");
+        pack1_json.object().get("compute").assert_string("dbx");
+        pack1_json
+            .object()
+            .get("repo")
+            .assert_string("http://test.repo.org");
+        pack1_json
+            .object()
+            .get("owner")
+            .assert_string("test_pack1@test.com");
+        pack1_json
+            .object()
+            .get("extra")
+            .object()
+            .get("abc")
+            .assert_i64(123);
+        pack1_json
+            .object()
+            .get("extra")
+            .object()
+            .get("def")
+            .assert_i64_array(&[1, 2, 3]);
+        pack1_json
+            .object()
+            .get("created_by")
+            .assert_string("test_user");
+        pack1_json
+            .object()
+            .get("modified_by")
+            .assert_string("test_user");
+
+        pack2_json.object().get("id").assert_i64(2);
+        pack2_json.object().get("name").assert_string("test_pack2");
+        pack2_json.object().get("domain_id").assert_i64(1);
+        pack2_json
+            .object()
+            .get("domain_name")
+            .assert_string("test_domain");
+        pack2_json.object().get("runtime").assert_string("docker");
+        pack2_json.object().get("compute").assert_string("dbx");
+        pack2_json
+            .object()
+            .get("repo")
+            .assert_string("http://test.repo.org");
+        pack2_json
+            .object()
+            .get("owner")
+            .assert_string("test_pack2@test.com");
+        pack2_json
+            .object()
+            .get("extra")
+            .object()
+            .get("abc")
+            .assert_i64(123);
+        pack2_json
+            .object()
+            .get("extra")
+            .object()
+            .get("def")
+            .assert_i64_array(&[1, 2, 3]);
+        pack2_json
+            .object()
+            .get("created_by")
+            .assert_string("test_user");
+        pack2_json
             .object()
             .get("modified_by")
             .assert_string("test_user");

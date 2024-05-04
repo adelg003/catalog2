@@ -50,6 +50,14 @@ pub struct ModelSearch {
     more: bool,
 }
 
+/// Params for searching for models
+pub struct ModelSearchParam {
+    pub model_name: Option<String>,
+    pub domain_name: Option<String>,
+    pub owner: Option<String>,
+    pub extra: Option<String>,
+}
+
 /// Model with fields
 #[derive(Object)]
 pub struct ModelFields {
@@ -116,10 +124,7 @@ pub async fn model_read(
 /// Read details of many models
 pub async fn model_read_search(
     tx: &mut Transaction<'_, Postgres>,
-    model_name: &Option<String>,
-    domain_name: &Option<String>,
-    owner: &Option<String>,
-    extra: &Option<String>,
+    search_param: &ModelSearchParam,
     page: &u64,
 ) -> Result<ModelSearch, poem::Error> {
     // Compute offset
@@ -127,30 +132,14 @@ pub async fn model_read_search(
     let next_offset = (page + 1) * PAGE_SIZE;
 
     // Pull the Models
-    let models = model_select_search(
-        tx,
-        model_name,
-        domain_name,
-        owner,
-        extra,
-        &Some(PAGE_SIZE),
-        &Some(offset),
-    )
-    .await
-    .map_err(InternalServerError)?;
+    let models = model_select_search(tx, search_param, &Some(PAGE_SIZE), &Some(offset))
+        .await
+        .map_err(InternalServerError)?;
 
-    // More domains present?
-    let next_model = model_select_search(
-        tx,
-        model_name,
-        domain_name,
-        owner,
-        extra,
-        &Some(PAGE_SIZE),
-        &Some(next_offset),
-    )
-    .await
-    .map_err(InternalServerError)?;
+    // More models present?
+    let next_model = model_select_search(tx, search_param, &Some(PAGE_SIZE), &Some(next_offset))
+        .await
+        .map_err(InternalServerError)?;
 
     let more = !next_model.is_empty();
 
@@ -452,9 +441,15 @@ mod tests {
 
         {
             let mut tx = pool.begin().await.unwrap();
-            let search = model_read_search(&mut tx, &None, &None, &None, &None, &0)
-                .await
-                .unwrap();
+
+            let search_param = ModelSearchParam {
+                model_name: None,
+                domain_name: None,
+                owner: None,
+                extra: None,
+            };
+
+            let search = model_read_search(&mut tx, &search_param, &0).await.unwrap();
 
             assert_eq!(search.models.len(), 50);
             assert_eq!(search.page, 0);
@@ -463,9 +458,15 @@ mod tests {
 
         {
             let mut tx = pool.begin().await.unwrap();
-            let search = model_read_search(&mut tx, &None, &None, &None, &None, &1)
-                .await
-                .unwrap();
+
+            let search_param = ModelSearchParam {
+                model_name: None,
+                domain_name: None,
+                owner: None,
+                extra: None,
+            };
+
+            let search = model_read_search(&mut tx, &search_param, &1).await.unwrap();
 
             assert_eq!(search.models.len(), 1);
             assert_eq!(search.page, 1);
@@ -474,10 +475,15 @@ mod tests {
 
         {
             let mut tx = pool.begin().await.unwrap();
-            let search =
-                model_read_search(&mut tx, &Some("test".to_string()), &None, &None, &None, &0)
-                    .await
-                    .unwrap();
+
+            let search_param = ModelSearchParam {
+                model_name: Some("test".to_string()),
+                domain_name: None,
+                owner: None,
+                extra: None,
+            };
+
+            let search = model_read_search(&mut tx, &search_param, &0).await.unwrap();
 
             assert_eq!(search.models.len(), 50);
             assert_eq!(search.page, 0);
@@ -486,16 +492,15 @@ mod tests {
 
         {
             let mut tx = pool.begin().await.unwrap();
-            let search = model_read_search(
-                &mut tx,
-                &Some("abcdef".to_string()),
-                &None,
-                &None,
-                &None,
-                &0,
-            )
-            .await
-            .unwrap();
+
+            let search_param = ModelSearchParam {
+                model_name: Some("abcdef".to_string()),
+                domain_name: None,
+                owner: None,
+                extra: None,
+            };
+
+            let search = model_read_search(&mut tx, &search_param, &0).await.unwrap();
 
             assert_eq!(search.models.len(), 0);
             assert_eq!(search.page, 0);
@@ -504,16 +509,15 @@ mod tests {
 
         {
             let mut tx = pool.begin().await.unwrap();
-            let search = model_read_search(
-                &mut tx,
-                &Some("foobar".to_string()),
-                &None,
-                &None,
-                &None,
-                &0,
-            )
-            .await
-            .unwrap();
+
+            let search_param = ModelSearchParam {
+                model_name: Some("foobar".to_string()),
+                domain_name: None,
+                owner: None,
+                extra: None,
+            };
+
+            let search = model_read_search(&mut tx, &search_param, &0).await.unwrap();
 
             assert_eq!(search.models.len(), 1);
             assert_eq!(search.models[0].name, "foobar_model");
@@ -521,10 +525,15 @@ mod tests {
 
         {
             let mut tx = pool.begin().await.unwrap();
-            let search =
-                model_read_search(&mut tx, &None, &Some("test".to_string()), &None, &None, &0)
-                    .await
-                    .unwrap();
+
+            let search_param = ModelSearchParam {
+                model_name: None,
+                domain_name: Some("test".to_string()),
+                owner: None,
+                extra: None,
+            };
+
+            let search = model_read_search(&mut tx, &search_param, &0).await.unwrap();
 
             assert_eq!(search.models.len(), 50);
             assert_eq!(search.page, 0);
@@ -533,16 +542,15 @@ mod tests {
 
         {
             let mut tx = pool.begin().await.unwrap();
-            let search = model_read_search(
-                &mut tx,
-                &Some("foobar".to_string()),
-                &None,
-                &Some("test.com".to_string()),
-                &None,
-                &0,
-            )
-            .await
-            .unwrap();
+
+            let search_param = ModelSearchParam {
+                model_name: Some("foobar".to_string()),
+                domain_name: None,
+                owner: Some("test.com".to_string()),
+                extra: None,
+            };
+
+            let search = model_read_search(&mut tx, &search_param, &0).await.unwrap();
 
             assert_eq!(search.models.len(), 1);
             assert_eq!(search.models[0].name, "foobar_model");
@@ -552,16 +560,15 @@ mod tests {
 
         {
             let mut tx = pool.begin().await.unwrap();
-            let search = model_read_search(
-                &mut tx,
-                &Some("foobar".to_string()),
-                &None,
-                &Some("test.com".to_string()),
-                &Some("abc".to_string()),
-                &0,
-            )
-            .await
-            .unwrap();
+
+            let search_param = ModelSearchParam {
+                model_name: Some("foobar".to_string()),
+                domain_name: None,
+                owner: Some("test.com".to_string()),
+                extra: Some("abc".to_string()),
+            };
+
+            let search = model_read_search(&mut tx, &search_param, &0).await.unwrap();
 
             assert_eq!(search.models.len(), 1);
             assert_eq!(search.models[0].name, "foobar_model");

@@ -2,6 +2,7 @@ mod auth;
 mod domain;
 mod field;
 mod model;
+mod pack;
 mod util;
 
 use crate::{
@@ -9,6 +10,7 @@ use crate::{
     domain::DomainApi,
     field::FieldApi,
     model::ModelApi,
+    pack::PackApi,
 };
 use color_eyre::eyre;
 use jsonwebtoken::{DecodingKey, EncodingKey};
@@ -48,7 +50,7 @@ async fn main() -> Result<(), eyre::Error> {
     migrate!().run(&pool).await?;
 
     // Collect all the APIs into one
-    let apis = (AuthApi, DomainApi, ModelApi, FieldApi);
+    let apis = (AuthApi, DomainApi, FieldApi, ModelApi, PackApi);
 
     // Setup OpenAPI Swagger Page
     let api_service = OpenApiService::new(apis, "Catalog2", "0.1.0")
