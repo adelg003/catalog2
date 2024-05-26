@@ -74,7 +74,7 @@ pub async fn model_select(
             model
         LEFT JOIN
             domain
-        on
+        ON
             model.domain_id = domain.id 
         WHERE
             model.name = $1",
@@ -110,7 +110,7 @@ pub async fn model_select_search(
             model
         LEFT JOIN
             domain
-        on
+        ON
             model.domain_id = domain.id",
     );
 
@@ -253,7 +253,7 @@ pub async fn field_select_by_model(
             field
         LEFT JOIN
             model
-        on
+        ON
             field.model_id = model.id 
         WHERE
             model.name = $1

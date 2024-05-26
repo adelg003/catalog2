@@ -85,7 +85,7 @@ pub async fn pack_select(
             pack
         LEFT JOIN
             domain
-        on
+        ON
             pack.domain_id = domain.id 
         WHERE
             pack.name = $1",
@@ -124,7 +124,7 @@ pub async fn pack_select_search(
             pack
         LEFT JOIN
             domain
-        on
+        ON
             pack.domain_id = domain.id",
     );
 

@@ -98,8 +98,23 @@ CREATE TABLE pack (
   FOREIGN KEY(domain_id) REFERENCES domain(id)
 );
 
+-- Pack needed to create a model
+CREATE TABLE model_dependency (
+  id SERIAL PRIMARY KEY,
+  model_id INTEGER NOT NULL UNIQUE,
+  pack_id INTEGER NOT NULL,
+  extra JSONB,
+  created_by TEXT NOT NULL,
+  created_date TIMESTAMPTZ NOT NULL,
+  modified_by TEXT NOT NULL,
+  modified_date TIMESTAMPTZ NOT NULL,
+  UNIQUE (model_id, pack_id),
+  FOREIGN KEY(model_id) REFERENCES model(id),
+  FOREIGN KEY(pack_id) REFERENCES pack(id)
+);
+
 -- Models needed to run the pack
-CREATE TABLE pack_dependencies (
+CREATE TABLE pack_dependency (
   id SERIAL PRIMARY KEY,
   pack_id INTEGER NOT NULL,
   model_id INTEGER NOT NULL,
@@ -113,17 +128,3 @@ CREATE TABLE pack_dependencies (
   FOREIGN KEY(model_id) REFERENCES model(id)
 );
 
--- Pack needed to create a model
-CREATE TABLE model_dependencies (
-  id SERIAL PRIMARY KEY,
-  model_id INTEGER NOT NULL UNIQUE,
-  pack_id INTEGER NOT NULL,
-  extra JSONB,
-  created_by TEXT NOT NULL,
-  created_date TIMESTAMPTZ NOT NULL,
-  modified_by TEXT NOT NULL,
-  modified_date TIMESTAMPTZ NOT NULL,
-  UNIQUE (model_id, pack_id),
-  FOREIGN KEY(model_id) REFERENCES model(id),
-  FOREIGN KEY(pack_id) REFERENCES pack(id)
-);

@@ -73,11 +73,9 @@ pub async fn domain_add(
     domain_param.validate().map_err(BadRequest)?;
 
     // Add new domain
-    let domain = domain_insert(tx, domain_param, username)
+    domain_insert(tx, domain_param, username)
         .await
-        .map_err(Conflict)?;
-
-    Ok(domain)
+        .map_err(Conflict)
 }
 
 /// Read details of a domain
@@ -86,9 +84,7 @@ pub async fn domain_read(
     domain_name: &str,
 ) -> Result<Domain, poem::Error> {
     // Pull domain
-    let domain = domain_select(tx, domain_name).await.map_err(NotFound)?;
-
-    Ok(domain)
+    domain_select(tx, domain_name).await.map_err(NotFound)
 }
 
 /// Read details of many domains
@@ -134,7 +130,7 @@ pub async fn domain_edit(
     let update = domain_update(tx, domain_name, domain_param, username).await;
 
     // What result did we get?
-    let domain = match update {
+    match update {
         Ok(domain) => Ok(domain),
         Err(sqlx::Error::RowNotFound) => Err(poem::Error::from_string(
             "domain does not exist",
@@ -142,9 +138,7 @@ pub async fn domain_edit(
         )),
         Err(sqlx::Error::Database(err)) => Err(Conflict(err)),
         Err(err) => Err(InternalServerError(err)),
-    }?;
-
-    Ok(domain)
+    }
 }
 
 /// Remove a Domain
@@ -156,7 +150,7 @@ pub async fn domain_remove(
     let delete = domain_drop(tx, domain_name).await;
 
     // What result did we get?
-    let domain = match delete {
+    match delete {
         Ok(domain) => Ok(domain),
         Err(sqlx::Error::RowNotFound) => Err(poem::Error::from_string(
             "domain does not exist",
@@ -164,9 +158,7 @@ pub async fn domain_remove(
         )),
         Err(sqlx::Error::Database(err)) => Err(Conflict(err)),
         Err(err) => Err(InternalServerError(err)),
-    }?;
-
-    Ok(domain)
+    }
 }
 
 /// Read details of a domain and add model details for that domain

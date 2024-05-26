@@ -97,7 +97,7 @@ pub async fn model_add(
     let insert = model_insert(tx, model_param, username).await;
 
     // What result did we get?
-    let model = match insert {
+    match insert {
         Ok(model) => Ok(model),
         Err(sqlx::Error::RowNotFound) => Err(poem::Error::from_string(
             "domain does not exist",
@@ -105,9 +105,7 @@ pub async fn model_add(
         )),
         Err(sqlx::Error::Database(err)) => Err(Conflict(err)),
         Err(err) => Err(InternalServerError(err)),
-    }?;
-
-    Ok(model)
+    }
 }
 
 /// Read details of a model
@@ -116,9 +114,7 @@ pub async fn model_read(
     model_name: &str,
 ) -> Result<Model, poem::Error> {
     // Pull model
-    let model: Model = model_select(tx, model_name).await.map_err(NotFound)?;
-
-    Ok(model)
+    model_select(tx, model_name).await.map_err(NotFound)
 }
 
 /// Read details of many models
@@ -149,6 +145,7 @@ pub async fn model_read_search(
         more,
     })
 }
+
 /// Edit a Model
 pub async fn model_edit(
     tx: &mut Transaction<'_, Postgres>,
@@ -163,7 +160,7 @@ pub async fn model_edit(
     let update = model_update(tx, model_name, model_param, username).await;
 
     // What result did we get?
-    let model = match update {
+    match update {
         Ok(model) => Ok(model),
         Err(sqlx::Error::RowNotFound) => Err(poem::Error::from_string(
             "domain or model does not exist",
@@ -171,9 +168,7 @@ pub async fn model_edit(
         )),
         Err(sqlx::Error::Database(err)) => Err(Conflict(err)),
         Err(err) => Err(InternalServerError(err)),
-    }?;
-
-    Ok(model)
+    }
 }
 
 /// Remove a Model
@@ -185,7 +180,7 @@ pub async fn model_remove(
     let delete = model_drop(tx, model_name).await;
 
     // What result did we get?
-    let model = match delete {
+    match delete {
         Ok(model) => Ok(model),
         Err(sqlx::Error::RowNotFound) => Err(poem::Error::from_string(
             "model does not exist",
@@ -193,9 +188,7 @@ pub async fn model_remove(
         )),
         Err(sqlx::Error::Database(err)) => Err(Conflict(err)),
         Err(err) => Err(InternalServerError(err)),
-    }?;
-
-    Ok(model)
+    }
 }
 
 /// Add a model with fields

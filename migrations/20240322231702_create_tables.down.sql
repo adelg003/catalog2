@@ -1,8 +1,8 @@
 -- Add down migration script here
 
 -- Drop Dependency Tables
-DROP TABLE IF EXISTS pack_dependencies;
-DROP TABLE IF EXISTS model_dependencies;
+DROP TABLE IF EXISTS pack_dependency;
+DROP TABLE IF EXISTS model_dependency;
 
 -- Drop Pack Table and types
 DROP TABLE IF EXISTS pack;

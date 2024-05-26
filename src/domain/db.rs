@@ -238,7 +238,7 @@ pub async fn model_select_by_domain(
             model
         LEFT JOIN
             domain
-        on
+        ON
             model.domain_id = domain.id
         WHERE
             domain.name = $1",
@@ -275,7 +275,7 @@ pub async fn pack_select_by_domain(
             pack
         LEFT JOIN
             domain
-        on
+        ON
             pack.domain_id = domain.id 
         WHERE
             domain.name = $1",

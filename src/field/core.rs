@@ -152,7 +152,7 @@ pub async fn field_add(
     let insert = field_insert(tx, field_param, username).await;
 
     // What result did we get?
-    let field = match insert {
+    match insert {
         Ok(field) => Ok(field),
         Err(sqlx::Error::RowNotFound) => Err(poem::Error::from_string(
             "model does not exist",
@@ -160,9 +160,7 @@ pub async fn field_add(
         )),
         Err(sqlx::Error::Database(err)) => Err(Conflict(err)),
         Err(err) => Err(InternalServerError(err)),
-    }?;
-
-    Ok(field)
+    }
 }
 
 /// Read details of a field
@@ -172,11 +170,9 @@ pub async fn field_read(
     field_name: &str,
 ) -> Result<Field, poem::Error> {
     // Pull field
-    let field = field_select(tx, model_name, field_name)
+    field_select(tx, model_name, field_name)
         .await
-        .map_err(NotFound)?;
-
-    Ok(field)
+        .map_err(NotFound)
 }
 
 /// Edit a Field
@@ -194,7 +190,7 @@ pub async fn field_edit(
     let update = field_update(tx, model_name, field_name, field_param, username).await;
 
     // What result did we get?
-    let field = match update {
+    match update {
         Ok(field) => Ok(field),
         Err(sqlx::Error::RowNotFound) => Err(poem::Error::from_string(
             "model or field does not exist",
@@ -202,9 +198,7 @@ pub async fn field_edit(
         )),
         Err(sqlx::Error::Database(err)) => Err(Conflict(err)),
         Err(err) => Err(InternalServerError(err)),
-    }?;
-
-    Ok(field)
+    }
 }
 
 /// Remove a Field
@@ -214,11 +208,9 @@ pub async fn field_remove(
     field_name: &str,
 ) -> Result<Field, poem::Error> {
     // Delete the field
-    let field = field_drop(tx, model_name, field_name)
+    field_drop(tx, model_name, field_name)
         .await
-        .map_err(NotFound)?;
-
-    Ok(field)
+        .map_err(NotFound)
 }
 
 #[cfg(test)]

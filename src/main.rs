@@ -1,4 +1,5 @@
 mod auth;
+mod dependency;
 mod domain;
 mod field;
 mod model;
@@ -7,6 +8,7 @@ mod util;
 
 use crate::{
     auth::{AuthApi, UserCred},
+    dependency::DependencyApi,
     domain::DomainApi,
     field::FieldApi,
     model::ModelApi,
@@ -50,7 +52,14 @@ async fn main() -> Result<(), eyre::Error> {
     migrate!().run(&pool).await?;
 
     // Collect all the APIs into one
-    let apis = (AuthApi, DomainApi, FieldApi, ModelApi, PackApi);
+    let apis = (
+        AuthApi,
+        DependencyApi,
+        DomainApi,
+        FieldApi,
+        ModelApi,
+        PackApi,
+    );
 
     // Setup OpenAPI Swagger Page
     let api_service = OpenApiService::new(apis, "Catalog2", "0.1.0")

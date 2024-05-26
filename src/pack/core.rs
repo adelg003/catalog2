@@ -121,7 +121,7 @@ pub async fn pack_add(
     let insert = pack_insert(tx, pack_param, username).await;
 
     // What result did we get?
-    let pack = match insert {
+    match insert {
         Ok(pack) => Ok(pack),
         Err(sqlx::Error::RowNotFound) => Err(poem::Error::from_string(
             "domain does not exist",
@@ -129,9 +129,7 @@ pub async fn pack_add(
         )),
         Err(sqlx::Error::Database(err)) => Err(Conflict(err)),
         Err(err) => Err(InternalServerError(err)),
-    }?;
-
-    Ok(pack)
+    }
 }
 
 /// Read details of a pack
@@ -140,9 +138,7 @@ pub async fn pack_read(
     pack_name: &str,
 ) -> Result<Pack, poem::Error> {
     // Pull Pack
-    let pack: Pack = pack_select(tx, pack_name).await.map_err(NotFound)?;
-
-    Ok(pack)
+    pack_select(tx, pack_name).await.map_err(NotFound)
 }
 
 /// Read details of many packs
@@ -187,7 +183,7 @@ pub async fn pack_edit(
     let update = pack_update(tx, pack_name, pack_param, username).await;
 
     // What result did we get?
-    let pack = match update {
+    match update {
         Ok(pack) => Ok(pack),
         Err(sqlx::Error::RowNotFound) => Err(poem::Error::from_string(
             "domain or pack does not exist",
@@ -195,9 +191,7 @@ pub async fn pack_edit(
         )),
         Err(sqlx::Error::Database(err)) => Err(Conflict(err)),
         Err(err) => Err(InternalServerError(err)),
-    }?;
-
-    Ok(pack)
+    }
 }
 
 /// Remove a Pack
@@ -209,7 +203,7 @@ pub async fn pack_remove(
     let delete = pack_drop(tx, pack_name).await;
 
     // What result did we get?
-    let pack = match delete {
+    match delete {
         Ok(pack) => Ok(pack),
         Err(sqlx::Error::RowNotFound) => Err(poem::Error::from_string(
             "pack does not exist",
@@ -217,9 +211,7 @@ pub async fn pack_remove(
         )),
         Err(sqlx::Error::Database(err)) => Err(Conflict(err)),
         Err(err) => Err(InternalServerError(err)),
-    }?;
-
-    Ok(pack)
+    }
 }
 
 #[cfg(test)]

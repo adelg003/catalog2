@@ -7,6 +7,7 @@ pub const PAGE_SIZE: u64 = 50;
 #[derive(Tags)]
 pub enum Tag {
     Auth,
+    Dependency,
     Domain,
     #[oai(rename = "Domain with Children")]
     DomainWithChildren,
