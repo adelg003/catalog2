@@ -1,4 +1,5 @@
 use crate::{
+    dependency::{dependencies_select, Dependency, DependencyType},
     pack::db::{pack_drop, pack_insert, pack_select, pack_select_search, pack_update},
     util::{dbx_validater, PAGE_SIZE},
 };
@@ -108,6 +109,13 @@ pub struct PackSearchParam {
     pub extra: Option<String>,
 }
 
+/// Pack with dependencies
+#[derive(Object)]
+pub struct PackChildren {
+    pack: Pack,
+    dependencies: Vec<Dependency>,
+}
+
 /// Add a pack
 pub async fn pack_add(
     tx: &mut Transaction<'_, Postgres>,
@@ -212,6 +220,22 @@ pub async fn pack_remove(
         Err(sqlx::Error::Database(err)) => Err(Conflict(err)),
         Err(err) => Err(InternalServerError(err)),
     }
+}
+
+/// Read details of a pack with dependencies
+pub async fn pack_read_with_children(
+    tx: &mut Transaction<'_, Postgres>,
+    pack_name: &str,
+) -> Result<PackChildren, poem::Error> {
+    // Pull pack
+    let pack = pack_read(tx, pack_name).await?;
+
+    // Pull dependencies
+    let dependencies = dependencies_select(tx, &DependencyType::Pack, pack_name)
+        .await
+        .map_err(InternalServerError)?;
+
+    Ok(PackChildren { pack, dependencies })
 }
 
 #[cfg(test)]

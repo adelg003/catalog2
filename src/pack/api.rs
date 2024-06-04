@@ -1,8 +1,8 @@
 use crate::{
     auth::{Auth, TokenAuth},
     pack::core::{
-        pack_add, pack_edit, pack_read, pack_read_search, pack_remove, ComputeType, Pack,
-        PackParam, PackSearch, PackSearchParam, RuntimeType,
+        pack_add, pack_edit, pack_read, pack_read_search, pack_read_with_children, pack_remove,
+        ComputeType, Pack, PackChildren, PackParam, PackSearch, PackSearchParam, RuntimeType,
     },
     util::Tag,
 };
@@ -138,6 +138,22 @@ impl PackApi {
         let pack_search = pack_read_search(&mut tx, &search_param, &page).await?;
 
         Ok(Json(pack_search))
+    }
+
+    /// Get a single model and its fields, and it dependencies
+    #[oai(path = "/pack_with_children/:pack_name", method = "get", tag = Tag::PackWithChildren)]
+    async fn pack_get_with_children(
+        &self,
+        Data(pool): Data<&PgPool>,
+        Path(pack_name): Path<String>,
+    ) -> Result<Json<PackChildren>, poem::Error> {
+        // Start Transaction
+        let mut tx = pool.begin().await.map_err(InternalServerError)?;
+
+        // Pull Pack with dependencies
+        let pack_children = pack_read_with_children(&mut tx, &pack_name).await?;
+
+        Ok(Json(pack_children))
     }
 }
 

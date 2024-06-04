@@ -13,10 +13,14 @@ pub enum Tag {
     DomainWithChildren,
     Field,
     Model,
+    #[oai(rename = "Model with Children")]
+    ModelWithChildren,
     #[oai(rename = "Model with Fields")]
     ModelWithFields,
     Search,
     Pack,
+    #[oai(rename = "Pack with Children")]
+    PackWithChildren,
 }
 
 /// Only allow for valid DBX name, meaning letters, number, dashes, and underscores. First

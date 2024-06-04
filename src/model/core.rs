@@ -1,4 +1,5 @@
 use crate::{
+    dependency::{dependencies_select, Dependency, DependencyType},
     field::{field_add, DbxDataType, Field, FieldParam},
     model::db::{
         field_drop_by_model, field_select_by_model, model_drop, model_insert, model_select,
@@ -82,6 +83,14 @@ pub struct FieldParamModelChild {
     pub precision: Option<i32>,
     pub scale: Option<i32>,
     pub extra: serde_json::Value,
+}
+
+/// Model with fields and dependencies
+#[derive(Object)]
+pub struct ModelChildren {
+    model: Model,
+    fields: Vec<Field>,
+    dependencies: Vec<Dependency>,
 }
 
 /// Add a model
@@ -260,6 +269,31 @@ pub async fn model_remove_with_fields(
     let model = model_remove(tx, model_name).await?;
 
     Ok(ModelFields { model, fields })
+}
+
+/// Read details of a model, add fields details for that model, and add dependencies
+pub async fn model_read_with_children(
+    tx: &mut Transaction<'_, Postgres>,
+    model_name: &str,
+) -> Result<ModelChildren, poem::Error> {
+    // Pull model
+    let model = model_read(tx, model_name).await?;
+
+    // Pull models
+    let fields = field_select_by_model(tx, model_name)
+        .await
+        .map_err(InternalServerError)?;
+
+    // Pull dependencies
+    let dependencies = dependencies_select(tx, &DependencyType::Model, model_name)
+        .await
+        .map_err(InternalServerError)?;
+
+    Ok(ModelChildren {
+        model,
+        fields,
+        dependencies,
+    })
 }
 
 #[cfg(test)]

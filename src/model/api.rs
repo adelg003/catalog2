@@ -2,8 +2,8 @@ use crate::{
     auth::{Auth, TokenAuth},
     model::core::{
         model_add, model_add_with_fields, model_edit, model_read, model_read_search,
-        model_read_with_fields, model_remove, model_remove_with_fields, Model, ModelFields,
-        ModelFieldsParam, ModelParam, ModelSearch, ModelSearchParam,
+        model_read_with_children, model_read_with_fields, model_remove, model_remove_with_fields,
+        Model, ModelFields, ModelFieldsParam, ModelParam, ModelSearch, ModelSearchParam,
     },
     util::Tag,
 };
@@ -14,6 +14,8 @@ use poem_openapi::{
     OpenApi,
 };
 use sqlx::PgPool;
+
+use super::core::ModelChildren;
 
 /// Struct we will build our REST API / Webserver
 pub struct ModelApi;
@@ -191,6 +193,22 @@ impl ModelApi {
         tx.commit().await.map_err(InternalServerError)?;
 
         Ok(Json(model_fields))
+    }
+
+    /// Get a single model and its fields, and it dependencies
+    #[oai(path = "/model_with_children/:model_name", method = "get", tag = Tag::ModelWithChildren)]
+    async fn model_get_with_children(
+        &self,
+        Data(pool): Data<&PgPool>,
+        Path(model_name): Path<String>,
+    ) -> Result<Json<ModelChildren>, poem::Error> {
+        // Start Transaction
+        let mut tx = pool.begin().await.map_err(InternalServerError)?;
+
+        // Pull domain
+        let model_children = model_read_with_children(&mut tx, &model_name).await?;
+
+        Ok(Json(model_children))
     }
 }
 
