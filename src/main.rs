@@ -2,6 +2,7 @@ mod auth;
 mod dependency;
 mod domain;
 mod field;
+mod graph;
 mod model;
 mod pack;
 mod util;
@@ -11,6 +12,7 @@ use crate::{
     dependency::DependencyApi,
     domain::DomainApi,
     field::FieldApi,
+    graph::GraphApi,
     model::ModelApi,
     pack::PackApi,
 };
@@ -57,6 +59,7 @@ async fn main() -> Result<(), eyre::Error> {
         DependencyApi,
         DomainApi,
         FieldApi,
+        GraphApi,
         ModelApi,
         PackApi,
     );

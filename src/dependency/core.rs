@@ -1,6 +1,9 @@
-use crate::dependency::db::{
-    dependencies_drop, dependencies_select, dependency_drop, dependency_insert, dependency_select,
-    dependency_update,
+use crate::{
+    dependency::db::{
+        dependencies_drop, dependencies_select, dependency_drop, dependency_insert,
+        dependency_select, dependency_update,
+    },
+    graph::graph_dependencies,
 };
 use chrono::{DateTime, Utc};
 use poem::{
@@ -68,10 +71,11 @@ pub async fn dependency_add(
     username: &str,
 ) -> Result<Dependency, poem::Error> {
     // Add Dependency
-    let insert = dependency_insert(tx, dependency_type, param, username).await;
+    let insert: Result<Dependency, sqlx::Error> =
+        dependency_insert(tx, dependency_type, param, username).await;
 
     // What result did we get?
-    match insert {
+    let dependency: Dependency = match insert {
         Ok(dependency) => Ok(dependency),
         Err(sqlx::Error::RowNotFound) => Err(poem::Error::from_string(
             "model or pack does not exist",
@@ -79,7 +83,18 @@ pub async fn dependency_add(
         )),
         Err(sqlx::Error::Database(err)) => Err(Conflict(err)),
         Err(err) => Err(InternalServerError(err)),
-    }
+    }?;
+
+    // What is the name of the dependency?
+    let node_name = match dependency_type {
+        DependencyType::Model => &param.model_name,
+        DependencyType::Pack => &param.pack_name,
+    };
+
+    // Check if updates dependency graph is valid.
+    graph_dependencies(tx, dependency_type, node_name, &None, &None).await?;
+
+    Ok(dependency)
 }
 
 /// Read details of a dependency
@@ -117,9 +132,21 @@ pub async fn dependency_edit(
     username: &str,
 ) -> Result<Dependency, poem::Error> {
     // Update dependency
-    dependency_update(tx, dependency_type, model_name, pack_name, param, username)
-        .await
-        .map_err(NotFound)
+    let dependency: Dependency =
+        dependency_update(tx, dependency_type, model_name, pack_name, param, username)
+            .await
+            .map_err(NotFound)?;
+
+    // What is the name of the dependency?
+    let node_name = match dependency_type {
+        DependencyType::Model => model_name,
+        DependencyType::Pack => pack_name,
+    };
+
+    // Check if updates dependency graph is valid.
+    graph_dependencies(tx, dependency_type, node_name, &None, &None).await?;
+
+    Ok(dependency)
 }
 
 /// Remove a Dependency

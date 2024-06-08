@@ -12,6 +12,7 @@ chrono = "0.4.38"
 color-eyre = "0.6.3"
 dotenvy = "0.15.7"
 jsonwebtoken = "9.3.0"
+petgraph = { version = "0.6.5", features = ["serde-1"] }
 poem = { version = "3.0.0", features = ["eyre06"] }
 poem-openapi = { version = "5.0.0", features = ["chrono", "swagger-ui"] }
 regex = "1.10.4"

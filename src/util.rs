@@ -12,6 +12,7 @@ pub enum Tag {
     #[oai(rename = "Domain with Children")]
     DomainWithChildren,
     Field,
+    Graph,
     Model,
     #[oai(rename = "Model with Children")]
     ModelWithChildren,
