@@ -3,7 +3,8 @@ use crate::{
     model::core::{
         model_add, model_add_with_fields, model_edit, model_read, model_read_search,
         model_read_with_children, model_read_with_fields, model_remove, model_remove_with_fields,
-        Model, ModelFields, ModelFieldsParam, ModelParam, ModelSearch, ModelSearchParam,
+        Model, ModelChildren, ModelFields, ModelFieldsParam, ModelParam, ModelSearch,
+        ModelSearchParam,
     },
     util::Tag,
 };
@@ -14,8 +15,6 @@ use poem_openapi::{
     OpenApi,
 };
 use sqlx::PgPool;
-
-use super::core::ModelChildren;
 
 /// Struct we will build our REST API / Webserver
 pub struct ModelApi;

@@ -7,14 +7,28 @@ use poem::{
     error::{Conflict, InternalServerError, NotFound},
     http::StatusCode,
 };
-use poem_openapi::Object;
+use poem_openapi::{Enum, Object};
 use serde::Serialize;
-use sqlx::{FromRow, Postgres, Transaction};
+use sqlx::{FromRow, Postgres, Transaction, Type};
+use std::fmt;
 
 /// What kind of dependency are we working with?
+#[derive(Clone, Copy, Debug, Enum, PartialEq, Serialize, Type)]
+#[oai(rename_all = "lowercase")]
+#[sqlx(rename_all = "lowercase")]
 pub enum DependencyType {
     Model,
     Pack,
+}
+
+/// Make DependencyType convertable to a string
+impl fmt::Display for DependencyType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            DependencyType::Model => write!(f, "model"),
+            DependencyType::Pack => write!(f, "pack"),
+        }
+    }
 }
 
 /// Model Dependency to return via the API
