@@ -15,7 +15,7 @@ use sqlx::PgPool;
 /// Return format of the graph
 #[derive(Object)]
 struct DagReturn {
-    patgraph: serde_json::Value,
+    petgraph: serde_json::Value,
     dot: String,
 }
 
@@ -48,10 +48,10 @@ impl GraphApi {
         .await?;
 
         // Transform Graph to JSON / DOT friendly formats
-        let patgraph: serde_json::Value =
+        let petgraph: serde_json::Value =
             serde_json::to_value(&dependency_flow).map_err(InternalServerError)?;
         let dot: String = Dot::with_config(&dependency_flow, &[Config::EdgeNoLabel]).to_string();
 
-        Ok(Json(DagReturn { patgraph, dot }))
+        Ok(Json(DagReturn { petgraph, dot }))
     }
 }
