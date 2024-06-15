@@ -15,6 +15,12 @@ jobs:
     steps:
     - name: Install sqlx-cli
       run: cargo install sqlx-cli
+    - name: Install where
+      run: which sqlx
+    - uses: actions/upload-artifact@v3
+      with:
+        name: sqlx-cli
+        path: target/release/sqlx
 
   rustfmt:
     runs-on: ubuntu-latest
