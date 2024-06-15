@@ -26,6 +26,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+    - name: Install sqlx-cli
+      run: cargo install sqlx-cli
     - name: Migrate
       run: sqlx migrate run
     - name: Check
