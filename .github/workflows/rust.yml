@@ -26,6 +26,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+    - name: Migrate
+      run: sqlx migrate run
     - name: Check
       run: cargo check --verbose
     - name: Linter
