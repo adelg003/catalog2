@@ -5,7 +5,7 @@ mod domain;
 mod field;
 mod graph;
 mod model;
-mod pack;
+mod pak;
 mod util;
 
 use crate::{api::api, auth::UserCred};
