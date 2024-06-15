@@ -30,7 +30,7 @@ jobs:
 
   check:
     runs-on: ubuntu-latest
-    needs: sqlx-cli
+    needs: sqlx-migration
     services:
       postgres:
         image: postgres
@@ -46,7 +46,7 @@ jobs:
 
   clippy:
     runs-on: ubuntu-latest
-    needs: sqlx-cli
+    needs: sqlx-migration
     services:
       postgres:
         image: postgres
@@ -62,7 +62,7 @@ jobs:
 
   rustfmt:
     runs-on: ubuntu-latest
-    needs: sqlx-cli
+    needs: sqlx-migration
     services:
       postgres:
         image: postgres
@@ -78,7 +78,7 @@ jobs:
       
   test:
     runs-on: ubuntu-latest
-    needs: sqlx-cli
+    needs: sqlx-migration
     services:
       postgres:
         image: postgres
