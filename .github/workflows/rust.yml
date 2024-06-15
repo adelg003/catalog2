@@ -22,7 +22,7 @@ jobs:
     steps:
     - name: Install sqlx-cli
       run: cargo install sqlx-cli
-    - uses: actions/upload-artifact@v3
+    - uses: actions/upload-artifact@v4
       with:
         name: sqlx-cli
         path: /home/runner/.cargo/bin/sqlx
@@ -42,7 +42,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - name: Get SQLx-CLI
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
       with:
         name: sqlx-cli
         path: /home/runner/.local/bin
@@ -68,7 +68,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - name: Get SQLx-CLI
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
       with:
         name: sqlx-cli
         path: /home/runner/.local/bin
@@ -94,7 +94,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - name: Get SQLx-CLI
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
       with:
         name: sqlx-cli
         path: /home/runner/.local/bin
