@@ -22,7 +22,6 @@ jobs:
         ports:
         - 5432:5432
     steps:
-    - uses: actions/checkout@v4
     - name: Install sqlx-cli
       run: cargo install sqlx-cli
     - name: Migrate
@@ -41,6 +40,7 @@ jobs:
         ports:
         - 5432:5432
     steps:
+    - uses: actions/checkout@v4
     - name: Check
       run: cargo check
 
@@ -57,6 +57,7 @@ jobs:
         ports:
         - 5432:5432
     steps:
+    - uses: actions/checkout@v4
     - name: Linter
       run: cargo clippy
 
@@ -73,6 +74,7 @@ jobs:
         ports:
         - 5432:5432
     steps:
+    - uses: actions/checkout@v4
     - name: Format
       run: cargo fmt --check --verbose
       
@@ -89,5 +91,6 @@ jobs:
         ports:
         - 5432:5432
     steps:
+    - uses: actions/checkout@v4
     - name: Tests
       run: cargo test
