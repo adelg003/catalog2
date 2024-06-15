@@ -1,10 +1,10 @@
 use crate::{
+    api::Tag,
     auth::{Auth, TokenAuth},
     dependency::core::{
         dependencies_read, dependencies_remove, dependency_add, dependency_edit, dependency_read,
         dependency_remove, Dependency, DependencyParam, DependencyParamUpdate, DependencyType,
     },
-    util::Tag,
 };
 use poem::{error::InternalServerError, web::Data};
 use poem_openapi::{param::Path, payload::Json, OpenApi};

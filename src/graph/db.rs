@@ -144,11 +144,9 @@ pub async fn edge_select(
             edges.source_type AS \"source_type!: DependencyType\",
             edges.source_id,
             source.name AS source_name,
-            edges.source_distance,
             edges.dest_type AS \"dest_type!: DependencyType\",
             edges.dest_id,
-            dest.name AS dest_name,
-            edges.dest_distance
+            dest.name AS dest_name
         FROM
             edges
         LEFT JOIN

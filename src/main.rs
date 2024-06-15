@@ -1,3 +1,4 @@
+mod api;
 mod auth;
 mod dependency;
 mod domain;
@@ -7,19 +8,10 @@ mod model;
 mod pack;
 mod util;
 
-use crate::{
-    auth::{AuthApi, UserCred},
-    dependency::DependencyApi,
-    domain::DomainApi,
-    field::FieldApi,
-    graph::GraphApi,
-    model::ModelApi,
-    pack::PackApi,
-};
+use crate::{api::api, auth::UserCred};
 use color_eyre::eyre;
 use jsonwebtoken::{DecodingKey, EncodingKey};
 use poem::{listener::TcpListener, middleware::Tracing, EndpointExt, Route, Server};
-use poem_openapi::OpenApiService;
 use sqlx::{migrate, PgPool};
 
 /// Read an environment variable or fall back to .env file
@@ -39,8 +31,8 @@ async fn main() -> Result<(), eyre::Error> {
         .init();
 
     // Read the configs from Env Variable and then fall back to the .env file.
-    let conn_str = read_env_var("DATABASE_URL")?;
-    let web_addr_str = read_env_var("WEB_URL")?;
+    let conn_str: String = read_env_var("DATABASE_URL")?;
+    let web_addr: String = read_env_var("WEB_URL")?;
     let user_creds: Vec<UserCred> = serde_json::from_str(&read_env_var("USER_CREDS")?)?;
 
     // Generate the encoding and decoding JWT keys
@@ -53,29 +45,10 @@ async fn main() -> Result<(), eyre::Error> {
     let pool = PgPool::connect(&conn_str).await?;
     migrate!().run(&pool).await?;
 
-    // Collect all the APIs into one
-    let apis = (
-        AuthApi,
-        DependencyApi,
-        DomainApi,
-        FieldApi,
-        GraphApi,
-        ModelApi,
-        PackApi,
-    );
-
-    // Setup OpenAPI Swagger Page
-    let api_service = OpenApiService::new(apis, "Catalog2", "0.1.0")
-        .server(format!("http://{}/api", web_addr_str));
-    let spec = api_service.spec_endpoint();
-    let swagger = api_service.swagger_ui();
-
     // Route inbound traffic
     let route = Route::new()
         // Developer friendly locations
-        .nest("/api", api_service)
-        .at("/spec", spec)
-        .nest("/swagger", swagger)
+        .nest("/api", api(&web_addr))
         // User friendly locations
         //.at("/", index)
         // Global context to be shared
@@ -87,9 +60,7 @@ async fn main() -> Result<(), eyre::Error> {
         .with(Tracing);
 
     // Lets run our service
-    Server::new(TcpListener::bind(web_addr_str))
-        .run(route)
-        .await?;
+    Server::new(TcpListener::bind(web_addr)).run(route).await?;
 
     Ok(())
 }

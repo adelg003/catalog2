@@ -1,10 +1,10 @@
 use crate::{
+    api::Tag,
     auth::{Auth, TokenAuth},
     domain::core::{
         domain_add, domain_edit, domain_read, domain_read_search, domain_read_with_children,
         domain_remove, Domain, DomainChildren, DomainParam, DomainSearch, DomainSearchParam,
     },
-    util::Tag,
 };
 use poem::{error::InternalServerError, web::Data};
 use poem_openapi::{

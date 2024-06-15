@@ -30,11 +30,9 @@ pub struct Edge {
     pub source_type: DependencyType,
     pub source_id: Option<i32>,
     pub source_name: Option<String>,
-    pub source_distance: Option<i32>,
     pub dest_type: DependencyType,
     pub dest_id: Option<i32>,
     pub dest_name: Option<String>,
-    pub dest_distance: Option<i32>,
 }
 
 impl Edge {

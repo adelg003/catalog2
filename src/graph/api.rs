@@ -1,7 +1,7 @@
 use crate::{
+    api::Tag,
     dependency::DependencyType,
     graph::core::{graph_dependencies, Dag},
-    util::Tag,
 };
 use petgraph::dot::{Config, Dot};
 use poem::{error::InternalServerError, web::Data};

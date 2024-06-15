@@ -1,4 +1,5 @@
 use crate::{
+    api::Tag,
     auth::{Auth, TokenAuth},
     model::core::{
         model_add, model_add_with_fields, model_edit, model_read, model_read_search,
@@ -6,7 +7,6 @@ use crate::{
         Model, ModelChildren, ModelFields, ModelFieldsParam, ModelParam, ModelSearch,
         ModelSearchParam,
     },
-    util::Tag,
 };
 use poem::{error::InternalServerError, web::Data};
 use poem_openapi::{

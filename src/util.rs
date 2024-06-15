@@ -1,28 +1,7 @@
-use poem_openapi::Tags;
 use regex::Regex;
 use validator::ValidationError;
 
 pub const PAGE_SIZE: u64 = 50;
-
-#[derive(Tags)]
-pub enum Tag {
-    Auth,
-    Dependency,
-    Domain,
-    #[oai(rename = "Domain with Children")]
-    DomainWithChildren,
-    Field,
-    Graph,
-    Model,
-    #[oai(rename = "Model with Children")]
-    ModelWithChildren,
-    #[oai(rename = "Model with Fields")]
-    ModelWithFields,
-    Search,
-    Pack,
-    #[oai(rename = "Pack with Children")]
-    PackWithChildren,
-}
 
 /// Only allow for valid DBX name, meaning letters, number, dashes, and underscores. First
 /// character needs to be a letter. Also, since DBX is case-insensitive, only allow lower
