@@ -96,7 +96,7 @@ pub mod test_utils {
     pub fn gen_test_domain_json(name: &str) -> serde_json::Value {
         json!({
             "name": name,
-            "owner": format!("{}@test.com", name),
+            "owner": format!("{name}@test.com"),
             "extra": {
                 "abc": 123,
                 "def": [1, 2, 3],
@@ -134,7 +134,7 @@ pub mod test_utils {
         json!({
             "name": name,
             "domain_name": domain_name,
-            "owner": format!("{}@test.com", name),
+            "owner": format!("{name}@test.com"),
             "extra": {
                 "abc": 123,
                 "def": [1, 2, 3],
@@ -217,7 +217,7 @@ pub mod test_utils {
             "runtime": "docker",
             "compute": "dbx",
             "repo": "http://test.repo.org",
-            "owner": format!("{}@test.com", name),
+            "owner": format!("{name}@test.com"),
             "extra": {
                 "abc": 123,
                 "def": [1, 2, 3],

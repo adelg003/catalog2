@@ -26,7 +26,7 @@ pub enum Tag {
 }
 
 /// Provide routs for the API endpoints
-pub fn api(web_addr: &str) -> Route {
+pub fn api(api_url: &str) -> Route {
     // Collect all the APIs into one
     let api_collection = (
         AuthApi,
@@ -39,8 +39,7 @@ pub fn api(web_addr: &str) -> Route {
     );
 
     // Setup API Endpoints
-    let api_service = OpenApiService::new(api_collection, "Catalog2", "0.1.0")
-        .server(format!("http://{web_addr}/api"));
+    let api_service = OpenApiService::new(api_collection, "Catalog2", "0.1.0").server(api_url);
 
     // Setup OpenAPI Spec
     let spec = api_service.spec_endpoint();

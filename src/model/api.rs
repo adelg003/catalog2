@@ -757,7 +757,7 @@ mod tests {
 
         // Model to create
         for index in 0..50 {
-            let body = gen_test_model_json(&format!("test_model_{}", index), "test_domain");
+            let body = gen_test_model_json(&format!("test_model_{index}"), "test_domain");
             post_test_model(&body, &pool).await;
         }
 

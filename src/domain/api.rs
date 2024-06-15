@@ -594,7 +594,7 @@ mod tests {
     async fn test_domain_get_search(pool: PgPool) {
         for index in 0..50 {
             // Domain to create
-            let body = gen_test_domain_json(&format!("test_domain_{}", index));
+            let body = gen_test_domain_json(&format!("test_domain_{index}"));
             post_test_domain(&body, &pool).await;
         }
 

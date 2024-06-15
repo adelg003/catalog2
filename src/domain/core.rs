@@ -249,7 +249,7 @@ mod tests {
 
         assert_eq!(err.status(), StatusCode::CONFLICT);
         assert_eq!(
-            format!("{}", err),
+            format!("{err}"),
             "error returned from database: duplicate key value violates unique constraint \"domain_name_key\""
         );
     }
@@ -295,7 +295,7 @@ mod tests {
 
         assert_eq!(err.status(), StatusCode::NOT_FOUND);
         assert_eq!(
-            format!("{}", err),
+            format!("{err}"),
             "no rows returned by a query that expected to return at least one row"
         );
     }
@@ -307,7 +307,7 @@ mod tests {
             let mut tx = pool.begin().await.unwrap();
 
             for index in 0..50 {
-                let domain_param = gen_test_domain_param(&format!("test_domain_{}", index));
+                let domain_param = gen_test_domain_param(&format!("test_domain_{index}"));
                 domain_insert(&mut tx, &domain_param, "test").await.unwrap();
             }
 
@@ -477,7 +477,7 @@ mod tests {
         };
 
         assert_eq!(err.status(), StatusCode::NOT_FOUND);
-        assert_eq!(format!("{}", err), "domain does not exist");
+        assert_eq!(format!("{err}"), "domain does not exist");
     }
 
     /// Test domain update with conflict
@@ -508,7 +508,7 @@ mod tests {
 
         assert_eq!(err.status(), StatusCode::CONFLICT);
         assert_eq!(
-            format!("{}", err),
+            format!("{err}"),
             "duplicate key value violates unique constraint \"domain_name_key\""
         );
     }
@@ -567,7 +567,7 @@ mod tests {
         };
 
         assert_eq!(err.status(), StatusCode::NOT_FOUND);
-        assert_eq!(format!("{}", err), "domain does not exist");
+        assert_eq!(format!("{err}"), "domain does not exist");
     }
 
     /// Test domain drop if children not droppped
@@ -593,7 +593,7 @@ mod tests {
 
         assert_eq!(err.status(), StatusCode::CONFLICT);
         assert_eq!(
-            format!("{}", err),
+            format!("{err}"),
             "update or delete on table \"domain\" violates foreign key constraint \"model_domain_id_fkey\" on table \"model\"",
         );
     }

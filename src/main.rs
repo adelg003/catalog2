@@ -48,7 +48,7 @@ async fn main() -> Result<(), eyre::Error> {
     // Route inbound traffic
     let route = Route::new()
         // Developer friendly locations
-        .nest("/api", api(&web_addr))
+        .nest("/api", api(&format!("http://{web_addr}/api")))
         // User friendly locations
         //.at("/", index)
         // Global context to be shared

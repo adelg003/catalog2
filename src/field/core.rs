@@ -321,7 +321,7 @@ mod tests {
         };
 
         assert_eq!(err.status(), StatusCode::NOT_FOUND);
-        assert_eq!(format!("{}", err), "model does not exist");
+        assert_eq!(format!("{err}"), "model does not exist");
     }
 
     /// Test double field create conflict
@@ -351,7 +351,7 @@ mod tests {
 
         assert_eq!(err.status(), StatusCode::CONFLICT);
         assert_eq!(
-            format!("{}", err),
+            format!("{err}"),
             "duplicate key value violates unique constraint \"field_model_id_name_key\"",
         );
     }
@@ -416,7 +416,7 @@ mod tests {
 
         assert_eq!(err.status(), StatusCode::NOT_FOUND);
         assert_eq!(
-            format!("{}", err),
+            format!("{err}"),
             "no rows returned by a query that expected to return at least one row",
         );
     }
@@ -504,7 +504,7 @@ mod tests {
         };
 
         assert_eq!(err.status(), StatusCode::NOT_FOUND);
-        assert_eq!(format!("{}", err), "model or field does not exist");
+        assert_eq!(format!("{err}"), "model or field does not exist");
 
         // Domain to create
         let body = gen_test_domain_json("test_domain");
@@ -530,7 +530,7 @@ mod tests {
         };
 
         assert_eq!(err.status(), StatusCode::NOT_FOUND);
-        assert_eq!(format!("{}", err), "model or field does not exist");
+        assert_eq!(format!("{err}"), "model or field does not exist");
     }
 
     /// Test field update with conflict
@@ -573,7 +573,7 @@ mod tests {
 
         assert_eq!(err.status(), StatusCode::CONFLICT);
         assert_eq!(
-            format!("{}", err),
+            format!("{err}"),
             "duplicate key value violates unique constraint \"field_model_id_name_key\"",
         );
     }
@@ -654,7 +654,7 @@ mod tests {
 
         assert_eq!(err.status(), StatusCode::NOT_FOUND);
         assert_eq!(
-            format!("{}", err),
+            format!("{err}"),
             "no rows returned by a query that expected to return at least one row",
         );
     }

@@ -127,16 +127,16 @@ pub async fn model_select_search(
 
         // Fuzzy search
         if let Some(model_name) = &search_param.model_name {
-            separated.push(format!("model.name ILIKE '%{}%'", model_name));
+            separated.push(format!("model.name ILIKE '%{model_name}%'"));
         }
         if let Some(domain_name) = &search_param.domain_name {
-            separated.push(format!("domain.name ILIKE '%{}%'", domain_name));
+            separated.push(format!("domain.name ILIKE '%{domain_name}%'"));
         }
         if let Some(owner) = &search_param.owner {
-            separated.push(format!("model.owner ILIKE '%{}%'", owner));
+            separated.push(format!("model.owner ILIKE '%{owner}%'"));
         }
         if let Some(extra) = &search_param.extra {
-            separated.push(format!("model.extra::text ILIKE '%{}%'", extra));
+            separated.push(format!("model.extra::text ILIKE '%{extra}%'"));
         }
     }
 
@@ -145,11 +145,11 @@ pub async fn model_select_search(
 
     // Add LIMIT
     if let Some(limit) = limit {
-        query.push(format!(" LIMIT {} ", limit));
+        query.push(format!(" LIMIT {limit} "));
 
         // Add OFFSET
         if let Some(offset) = offset {
-            query.push(format!(" OFFSET {} ", offset));
+            query.push(format!(" OFFSET {offset} "));
         }
     }
 

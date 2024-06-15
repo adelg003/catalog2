@@ -8,7 +8,7 @@ pub mod test_utils {
         ModelParam {
             name: name.to_string(),
             domain_name: domain_name.to_string(),
-            owner: format!("{}@test.com", name),
+            owner: format!("{name}@test.com"),
             extra: json!({
                 "abc": 123,
                 "def": [1, 2, 3],

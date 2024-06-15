@@ -111,8 +111,8 @@ pub async fn pack_select_search(
             pack.name,
             pack.domain_id,
             domain.name AS \"domain_name\",
-            pack.runtime AS \"runtime!: RuntimeType\",
-            pack.compute AS \"compute!: ComputeType\",
+            pack.runtime,
+            pack.compute,
             pack.repo,
             pack.owner,
             pack.extra,
@@ -144,25 +144,25 @@ pub async fn pack_select_search(
 
         // Fuzzy search
         if let Some(pack_name) = &search_param.pack_name {
-            separated.push(format!("pack.name ILIKE '%{}%'", pack_name));
+            separated.push(format!("pack.name ILIKE '%{pack_name}%'"));
         }
         if let Some(domain_name) = &search_param.domain_name {
-            separated.push(format!("domain.name ILIKE '%{}%'", domain_name));
+            separated.push(format!("domain.name ILIKE '%{domain_name}%'"));
         }
         if let Some(runtime) = search_param.runtime {
-            separated.push(format!("pack.runtime = '{}'", runtime));
+            separated.push(format!("pack.runtime = '{runtime}'"));
         }
         if let Some(compute) = search_param.compute {
-            separated.push(format!("pack.compute = '{}'", compute));
+            separated.push(format!("pack.compute = '{compute}'"));
         }
         if let Some(repo) = &search_param.repo {
-            separated.push(format!("pack.repo ILIKE '%{}%'", repo));
+            separated.push(format!("pack.repo ILIKE '%{repo}%'"));
         }
         if let Some(owner) = &search_param.owner {
-            separated.push(format!("pack.owner ILIKE '%{}%'", owner));
+            separated.push(format!("pack.owner ILIKE '%{owner}%'"));
         }
         if let Some(extra) = &search_param.extra {
-            separated.push(format!("pack.extra::text ILIKE '%{}%'", extra));
+            separated.push(format!("pack.extra::text ILIKE '%{extra}%'"));
         }
     }
 
@@ -171,11 +171,11 @@ pub async fn pack_select_search(
 
     // Add LIMIT
     if let Some(limit) = limit {
-        query.push(format!(" LIMIT {} ", limit));
+        query.push(format!(" LIMIT {limit} "));
 
         // Add OFFSET
         if let Some(offset) = offset {
-            query.push(format!(" OFFSET {} ", offset));
+            query.push(format!(" OFFSET {offset} "));
         }
     }
 

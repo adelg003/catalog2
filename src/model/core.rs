@@ -357,7 +357,7 @@ mod tests {
         };
 
         assert_eq!(err.status(), StatusCode::NOT_FOUND);
-        assert_eq!(format!("{}", err), "domain does not exist");
+        assert_eq!(format!("{err}"), "domain does not exist");
     }
 
     /// Test double model create conflict
@@ -383,7 +383,7 @@ mod tests {
 
         assert_eq!(err.status(), StatusCode::CONFLICT);
         assert_eq!(
-            format!("{}", err),
+            format!("{err}"),
             "duplicate key value violates unique constraint \"model_name_key\"",
         );
     }
@@ -435,7 +435,7 @@ mod tests {
 
         assert_eq!(err.status(), StatusCode::NOT_FOUND);
         assert_eq!(
-            format!("{}", err),
+            format!("{err}"),
             "no rows returned by a query that expected to return at least one row",
         );
     }
@@ -456,7 +456,7 @@ mod tests {
 
             for index in 0..50 {
                 let model_param =
-                    gen_test_model_param(&format!("test_model_{}", index), "test_domain");
+                    gen_test_model_param(&format!("test_model_{index}"), "test_domain");
                 model_insert(&mut tx, &model_param, "test").await.unwrap();
             }
 
@@ -666,7 +666,7 @@ mod tests {
         };
 
         assert_eq!(err.status(), StatusCode::NOT_FOUND);
-        assert_eq!(format!("{}", err), "domain or model does not exist");
+        assert_eq!(format!("{err}"), "domain or model does not exist");
 
         {
             let model_param = gen_test_model_param("test_model", "test_domain");
@@ -687,7 +687,7 @@ mod tests {
         };
 
         assert_eq!(err.status(), StatusCode::NOT_FOUND);
-        assert_eq!(format!("{}", err), "domain or model does not exist");
+        assert_eq!(format!("{err}"), "domain or model does not exist");
     }
 
     /// Test model update with conflict
@@ -720,7 +720,7 @@ mod tests {
 
         assert_eq!(err.status(), StatusCode::CONFLICT);
         assert_eq!(
-            format!("{}", err),
+            format!("{err}"),
             "duplicate key value violates unique constraint \"model_name_key\"",
         );
     }
@@ -785,7 +785,7 @@ mod tests {
         };
 
         assert_eq!(err.status(), StatusCode::NOT_FOUND);
-        assert_eq!(format!("{}", err), "model does not exist");
+        assert_eq!(format!("{err}"), "model does not exist");
     }
 
     /// Test model drop if children not droppped
@@ -814,7 +814,7 @@ mod tests {
 
         assert_eq!(err.status(), StatusCode::CONFLICT);
         assert_eq!(
-            format!("{}", err),
+            format!("{err}"),
             "update or delete on table \"model\" violates foreign key constraint \"field_model_id_fkey\" on table \"field\"",
         );
     }
@@ -1110,7 +1110,7 @@ mod tests {
 
             assert_eq!(err.status(), StatusCode::NOT_FOUND);
             assert_eq!(
-                format!("{}", err),
+                format!("{err}"),
                 "no rows returned by a query that expected to return at least one row",
             );
         }
