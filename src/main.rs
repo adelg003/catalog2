@@ -27,7 +27,7 @@ async fn main() -> Result<(), eyre::Error> {
 
     // Use async-friendly logging for Poem
     tracing_subscriber::fmt()
-        .with_env_filter(format!("poem=trace"))
+        .with_env_filter("poem=trace")
         .init();
 
     // Read the configs from Env Variable and then fall back to the .env file.
