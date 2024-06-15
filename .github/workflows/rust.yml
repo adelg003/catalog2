@@ -47,7 +47,9 @@ jobs:
         name: sqlx-cli
         path: /home/runner/.local/bin
     - name: Migrate DB
-      run: sqlx migrate run
+      run: |
+        chmod +x /home/runner/.local/bin/sqlx
+        sqlx migrate run
     - name: Check
       run: cargo check
 
@@ -71,7 +73,9 @@ jobs:
         name: sqlx-cli
         path: /home/runner/.local/bin
     - name: Migrate DB
-      run: sqlx migrate run
+      run: |
+        chmod +x /home/runner/.local/bin/sqlx
+        sqlx migrate run
     - name: Clippy
       run: cargo clippy
       
@@ -95,6 +99,8 @@ jobs:
         name: sqlx-cli
         path: /home/runner/.local/bin
     - name: Migrate DB
-      run: sqlx migrate run
+      run: |
+        chmod +x /home/runner/.local/bin/sqlx
+        sqlx migrate run
     - name: Tests
       run: cargo test
