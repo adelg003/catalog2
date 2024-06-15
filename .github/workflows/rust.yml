@@ -1,0 +1,36 @@
+name: Rust
+
+on:
+  push:
+    branches: [ "main", "workflow" ]
+  pull_request:
+    branches: [ "main", "workflow" ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres
+        env:
+          POSTGRES_DB: catalog2
+          POSTGRES_USER: catalog2
+          POSTGRES_PASSWORD: password
+        ports:
+        - 5432:5432
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Check
+      run: cargo check --verbose
+    - name: Linter
+      run: cargo clippy --verbose
+    - name: Format
+      run: cargo fmt --verbose
+    - name: Tests
+      run: cargo test --verbose
