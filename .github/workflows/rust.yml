@@ -10,24 +10,22 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  sqlx-cli:
-    runs-on: ubuntu-latest
-    steps:
-    - name: Install sqlx-cli
-      run: cargo install sqlx-cli
-    - name: Install where
-      run: which sqlx
-    - uses: actions/upload-artifact@v3
-      with:
-        name: sqlx-cli
-        path: target/release/sqlx
-
   rustfmt:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
     - name: Format
       run: cargo fmt --check --verbose
+      
+  sqlx-cli:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Install sqlx-cli
+      run: cargo install sqlx-cli
+    - uses: actions/upload-artifact@v3
+      with:
+        name: sqlx-cli
+        path: /home/runner/.cargo/bin/sqlx
 
   check:
     runs-on: ubuntu-latest
@@ -43,6 +41,11 @@ jobs:
         - 5432:5432
     steps:
     - uses: actions/checkout@v4
+    - name: Get SQLx-CLI
+        uses: actions/download-artifact@v3
+        with:
+          name: sqlx-cli
+          path: /home/runner/.cargo/bin/sqlx
     - name: Migrate DB
       run: sqlx migrate run
     - name: Check
@@ -62,6 +65,11 @@ jobs:
         - 5432:5432
     steps:
     - uses: actions/checkout@v4
+    - name: Get SQLx-CLI
+        uses: actions/download-artifact@v3
+        with:
+          name: sqlx-cli
+          path: /home/runner/.cargo/bin/sqlx
     - name: Migrate DB
       run: sqlx migrate run
     - name: Clippy
@@ -81,6 +89,11 @@ jobs:
         - 5432:5432
     steps:
     - uses: actions/checkout@v4
+    - name: Get SQLx-CLI
+        uses: actions/download-artifact@v3
+        with:
+          name: sqlx-cli
+          path: /home/runner/.cargo/bin/sqlx
     - name: Migrate DB
       run: sqlx migrate run
     - name: Tests
