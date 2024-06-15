@@ -31,10 +31,10 @@ jobs:
     - name: Migrate
       run: sqlx migrate run
     - name: Check
-      run: cargo check --verbose
+      run: cargo check
     - name: Linter
-      run: cargo clippy --verbose
+      run: cargo clippy
     - name: Format
-      run: cargo fmt --verbose
+      run: cargo fmt --check --verbose
     - name: Tests
-      run: cargo test --verbose
+      run: cargo test
