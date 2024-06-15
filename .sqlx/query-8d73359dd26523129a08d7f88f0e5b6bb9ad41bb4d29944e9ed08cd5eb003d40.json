@@ -1,0 +1,47 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE\n            field\n        SET \n            name = $1,\n            is_primary = $2,\n            data_type = $3,\n            is_nullable = $4,\n            precision = $5,\n            scale = $6,\n            extra = $7,\n            modified_by = $8,\n            modified_date = $9\n        WHERE\n            model_id = $10\n            AND name = $11",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Bool",
+        {
+          "Custom": {
+            "name": "dbx_data_type",
+            "kind": {
+              "Enum": [
+                "bigint",
+                "binary",
+                "boolean",
+                "date",
+                "decimal",
+                "double",
+                "float",
+                "int",
+                "interval",
+                "void",
+                "smallint",
+                "string",
+                "timestamp",
+                "timestampntz",
+                "tinyint"
+              ]
+            }
+          }
+        },
+        "Bool",
+        "Int4",
+        "Int4",
+        "Jsonb",
+        "Text",
+        "Timestamptz",
+        "Int4",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8d73359dd26523129a08d7f88f0e5b6bb9ad41bb4d29944e9ed08cd5eb003d40"
+}

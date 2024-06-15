@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM\n                    pack_dependency AS dependency\n                USING\n                    model,\n                    pack\n                WHERE\n                    dependency.model_id = model.id\n                    AND dependency.pack_id = pack.id\n                    AND model.name = $1\n                    AND pack.name = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2c6cf15832c2cc1acbfc59333d195435e4debb5f93374175ced2de1aec9cb111"
+}

@@ -1,0 +1,77 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT\n                    dependency.id,\n                    dependency.model_id,\n                    model.name AS model_name,\n                    dependency.pack_id,\n                    pack.name AS pack_name,\n                    dependency.extra,\n                    dependency.created_by,\n                    dependency.created_date,\n                    dependency.modified_by,\n                    dependency.modified_date\n                FROM\n                    pack_dependency AS dependency\n                INNER JOIN\n                    model\n                ON\n                    dependency.model_id = model.id\n                INNER JOIN\n                    pack\n                ON\n                    dependency.pack_id = pack.id\n                WHERE\n                    model.name = $1\n                    AND pack.name = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "model_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "model_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "pack_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "pack_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "extra",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 6,
+        "name": "created_by",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "created_date",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "modified_by",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "modified_date",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "d3f237b05971f024efa0b0856f6c4d1d88c5fb4bfddf0ea469e2bdd9226e86e1"
+}

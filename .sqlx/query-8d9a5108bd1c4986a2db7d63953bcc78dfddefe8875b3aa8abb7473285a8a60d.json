@@ -1,0 +1,76 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT\n            model.id,\n            model.name,\n            model.domain_id,\n            domain.name AS \"domain_name\",\n            model.owner,\n            model.extra,\n            model.created_by,\n            model.created_date,\n            model.modified_by,\n            model.modified_date\n        FROM\n            model\n        LEFT JOIN\n            domain\n        ON\n            model.domain_id = domain.id \n        WHERE\n            model.name = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "domain_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 3,
+        "name": "domain_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "owner",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "extra",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 6,
+        "name": "created_by",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "created_date",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "modified_by",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "modified_date",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "8d9a5108bd1c4986a2db7d63953bcc78dfddefe8875b3aa8abb7473285a8a60d"
+}

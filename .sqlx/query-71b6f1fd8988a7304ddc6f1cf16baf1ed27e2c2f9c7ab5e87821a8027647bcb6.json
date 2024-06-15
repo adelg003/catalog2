@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM\n            pack\n        WHERE\n            name = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "71b6f1fd8988a7304ddc6f1cf16baf1ed27e2c2f9c7ab5e87821a8027647bcb6"
+}

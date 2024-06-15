@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM\n            field\n        WHERE\n            model_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f7a74f5fbe440bd49f1de9fa759fd3d1fb32aaf45aeb57b6b51c93347aee16e3"
+}

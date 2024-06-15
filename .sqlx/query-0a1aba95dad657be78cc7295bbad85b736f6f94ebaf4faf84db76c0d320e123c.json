@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE\n            pack\n        SET \n            name = $1,\n            domain_id = $2,\n            runtime = $3,\n            compute = $4,\n            repo = $5,\n            owner = $6,\n            extra = $7,\n            modified_by = $8,\n            modified_date = $9\n        WHERE\n            name = $10",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int4",
+        {
+          "Custom": {
+            "name": "runtime_type",
+            "kind": {
+              "Enum": [
+                "docker",
+                "dbxjob",
+                "dbt",
+                "dag"
+              ]
+            }
+          }
+        },
+        {
+          "Custom": {
+            "name": "compute_type",
+            "kind": {
+              "Enum": [
+                "docker",
+                "dbx",
+                "memsql"
+              ]
+            }
+          }
+        },
+        "Text",
+        "Text",
+        "Jsonb",
+        "Text",
+        "Timestamptz",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0a1aba95dad657be78cc7295bbad85b736f6f94ebaf4faf84db76c0d320e123c"
+}

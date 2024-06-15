@@ -1,0 +1,117 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT\n            pack.id,\n            pack.name,\n            pack.domain_id,\n            domain.name AS \"domain_name\",\n            pack.runtime AS \"runtime!: RuntimeType\",\n            pack.compute AS \"compute!: ComputeType\",\n            pack.repo,\n            pack.owner,\n            pack.extra,\n            pack.created_by,\n            pack.created_date,\n            pack.modified_by,\n            pack.modified_date\n        FROM\n            pack\n        LEFT JOIN\n            domain\n        ON\n            pack.domain_id = domain.id \n        WHERE\n            domain.name = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "domain_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 3,
+        "name": "domain_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "runtime!: RuntimeType",
+        "type_info": {
+          "Custom": {
+            "name": "runtime_type",
+            "kind": {
+              "Enum": [
+                "docker",
+                "dbxjob",
+                "dbt",
+                "dag"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "compute!: ComputeType",
+        "type_info": {
+          "Custom": {
+            "name": "compute_type",
+            "kind": {
+              "Enum": [
+                "docker",
+                "dbx",
+                "memsql"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "repo",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "owner",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "extra",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 9,
+        "name": "created_by",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "created_date",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 11,
+        "name": "modified_by",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 12,
+        "name": "modified_date",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "a23cbe10c719204cc3e90b52bf194492b25fd6d2ca23eb3335e2491aab9701be"
+}

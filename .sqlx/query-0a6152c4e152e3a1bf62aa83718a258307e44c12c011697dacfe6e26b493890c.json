@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE\n                model_dependency AS dependency\n            SET \n                extra = $1,\n                modified_by = $2,\n                modified_date = $3\n            FROM\n                model,\n                pack\n            WHERE\n                dependency.model_id = model.id\n                AND dependency.pack_id = pack.id\n                AND model.name = $4\n                AND pack.name = $5",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Jsonb",
+        "Text",
+        "Timestamptz",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0a6152c4e152e3a1bf62aa83718a258307e44c12c011697dacfe6e26b493890c"
+}

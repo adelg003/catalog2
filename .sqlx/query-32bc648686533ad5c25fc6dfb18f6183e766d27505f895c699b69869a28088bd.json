@@ -1,0 +1,48 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO field (\n            name,\n            model_id,\n            is_primary,\n            data_type,\n            is_nullable,\n            precision,\n            scale,\n            extra,\n            created_by,\n            created_date,\n            modified_by,\n            modified_date\n        ) VALUES (\n            $1,\n            $2,\n            $3,\n            $4,\n            $5,\n            $6,\n            $7,\n            $8,\n            $9,\n            $10,\n            $11,\n            $12\n        )",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int4",
+        "Bool",
+        {
+          "Custom": {
+            "name": "dbx_data_type",
+            "kind": {
+              "Enum": [
+                "bigint",
+                "binary",
+                "boolean",
+                "date",
+                "decimal",
+                "double",
+                "float",
+                "int",
+                "interval",
+                "void",
+                "smallint",
+                "string",
+                "timestamp",
+                "timestampntz",
+                "tinyint"
+              ]
+            }
+          }
+        },
+        "Bool",
+        "Int4",
+        "Int4",
+        "Jsonb",
+        "Text",
+        "Timestamptz",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "32bc648686533ad5c25fc6dfb18f6183e766d27505f895c699b69869a28088bd"
+}
