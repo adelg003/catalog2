@@ -10,27 +10,22 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  sqlx-migration:
+  sqlx-cli:
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres
-        env:
-          POSTGRES_DB: catalog2
-          POSTGRES_USER: catalog2
-          POSTGRES_PASSWORD: password
-        ports:
-        - 5432:5432
     steps:
-    - uses: actions/checkout@v4
     - name: Install sqlx-cli
       run: cargo install sqlx-cli
-    - name: Migrate
-      run: sqlx migrate run
+
+  rustfmt:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Format
+      run: cargo fmt --check --verbose
 
   check:
     runs-on: ubuntu-latest
-    needs: sqlx-migration
+    needs: sqlx-cli
     services:
       postgres:
         image: postgres
@@ -42,12 +37,14 @@ jobs:
         - 5432:5432
     steps:
     - uses: actions/checkout@v4
+    - name: Migrate DB
+      run: sqlx migrate run
     - name: Check
       run: cargo check
 
   clippy:
     runs-on: ubuntu-latest
-    needs: sqlx-migration
+    needs: sqlx-cli
     services:
       postgres:
         image: postgres
@@ -59,29 +56,14 @@ jobs:
         - 5432:5432
     steps:
     - uses: actions/checkout@v4
-    - name: Linter
+    - name: Migrate DB
+      run: sqlx migrate run
+    - name: Clippy
       run: cargo clippy
-
-  rustfmt:
-    runs-on: ubuntu-latest
-    needs: sqlx-migration
-    services:
-      postgres:
-        image: postgres
-        env:
-          POSTGRES_DB: catalog2
-          POSTGRES_USER: catalog2
-          POSTGRES_PASSWORD: password
-        ports:
-        - 5432:5432
-    steps:
-    - uses: actions/checkout@v4
-    - name: Format
-      run: cargo fmt --check --verbose
       
   test:
     runs-on: ubuntu-latest
-    needs: sqlx-migration
+    needs: sqlx-cli
     services:
       postgres:
         image: postgres
@@ -93,5 +75,7 @@ jobs:
         - 5432:5432
     steps:
     - uses: actions/checkout@v4
+    - name: Migrate DB
+      run: sqlx migrate run
     - name: Tests
       run: cargo test
