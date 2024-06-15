@@ -45,7 +45,7 @@ jobs:
       uses: actions/download-artifact@v3
       with:
         name: sqlx-cli
-        path: /home/runner/.cargo/bin/sqlx
+        path: /home/runner/.local/bin
     - name: Migrate DB
       run: sqlx migrate run
     - name: Check
@@ -69,7 +69,7 @@ jobs:
       uses: actions/download-artifact@v3
       with:
         name: sqlx-cli
-        path: /home/runner/.cargo/bin/sqlx
+        path: /home/runner/.local/bin
     - name: Migrate DB
       run: sqlx migrate run
     - name: Clippy
@@ -93,7 +93,7 @@ jobs:
       uses: actions/download-artifact@v3
       with:
         name: sqlx-cli
-        path: /home/runner/.cargo/bin/sqlx
+        path: /home/runner/.local/bin
     - name: Migrate DB
       run: sqlx migrate run
     - name: Tests
