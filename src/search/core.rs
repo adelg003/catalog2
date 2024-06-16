@@ -164,7 +164,7 @@ mod tests {
                 post_test_domain(&body, &pool).await;
             }
 
-            let body = gen_test_domain_json(&format!("foobar_domain"));
+            let body = gen_test_domain_json("foobar_domain");
             post_test_domain(&body, &pool).await;
         }
 
@@ -297,7 +297,7 @@ mod tests {
             }
 
             // Model to create
-            let body = gen_test_model_json(&format!("foobar_model"), "foobar_domain");
+            let body = gen_test_model_json("foobar_model", "foobar_domain");
             post_test_model(&body, &pool).await;
         }
 
