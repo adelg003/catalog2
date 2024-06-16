@@ -3,4 +3,4 @@ mod core;
 mod db;
 mod util;
 
-pub use crate::domain::{api::DomainApi, db::domain_select};
+pub use crate::domain::{api::DomainApi, core::Domain, db::domain_select};

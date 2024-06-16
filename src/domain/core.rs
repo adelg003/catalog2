@@ -1,11 +1,11 @@
 use crate::{
     domain::db::{
-        domain_drop, domain_insert, domain_select, domain_select_search, domain_update,
-        model_select_by_domain, pack_select_by_domain,
+        domain_drop, domain_insert, domain_select, domain_update, model_select_by_domain,
+        pack_select_by_domain,
     },
     model::Model,
     pack::Pack,
-    util::{dbx_validater, PAGE_SIZE},
+    util::dbx_validater,
 };
 use chrono::{DateTime, Utc};
 use poem::{
@@ -40,21 +40,6 @@ pub struct DomainParam {
     pub extra: serde_json::Value,
 }
 
-/// Domain Search Results
-#[derive(Object)]
-pub struct DomainSearch {
-    domains: Vec<Domain>,
-    page: u64,
-    more: bool,
-}
-
-/// Params for searching for domains
-pub struct DomainSearchParam {
-    pub domain_name: Option<String>,
-    pub owner: Option<String>,
-    pub extra: Option<String>,
-}
-
 /// Domain with models and packs
 #[derive(Object)]
 pub struct DomainChildren {
@@ -85,35 +70,6 @@ pub async fn domain_read(
 ) -> Result<Domain, poem::Error> {
     // Pull domain
     domain_select(tx, domain_name).await.map_err(NotFound)
-}
-
-/// Read details of many domains
-pub async fn domain_read_search(
-    tx: &mut Transaction<'_, Postgres>,
-    search_param: &DomainSearchParam,
-    page: &u64,
-) -> Result<DomainSearch, poem::Error> {
-    // Compute offset
-    let offset = page * PAGE_SIZE;
-    let next_offset = (page + 1) * PAGE_SIZE;
-
-    // Pull the Domains
-    let domains = domain_select_search(tx, search_param, &Some(PAGE_SIZE), &Some(offset))
-        .await
-        .map_err(InternalServerError)?;
-
-    // More domains present?
-    let next_domain = domain_select_search(tx, search_param, &Some(PAGE_SIZE), &Some(next_offset))
-        .await
-        .map_err(InternalServerError)?;
-
-    let more = !next_domain.is_empty();
-
-    Ok(DomainSearch {
-        domains,
-        page: *page,
-        more,
-    })
 }
 
 /// Edit a Domain
@@ -298,135 +254,6 @@ mod tests {
             format!("{err}"),
             "no rows returned by a query that expected to return at least one row"
         );
-    }
-
-    /// Test domain search
-    #[sqlx::test]
-    async fn test_domain_read_search(pool: PgPool) {
-        {
-            let mut tx = pool.begin().await.unwrap();
-
-            for index in 0..50 {
-                let domain_param = gen_test_domain_param(&format!("test_domain_{index}"));
-                domain_insert(&mut tx, &domain_param, "test").await.unwrap();
-            }
-
-            let domain_param = gen_test_domain_param("foobar_domain");
-            domain_insert(&mut tx, &domain_param, "foobar")
-                .await
-                .unwrap();
-
-            tx.commit().await.unwrap();
-        }
-
-        {
-            let mut tx = pool.begin().await.unwrap();
-
-            let search_param = DomainSearchParam {
-                domain_name: None,
-                owner: None,
-                extra: None,
-            };
-
-            let search = domain_read_search(&mut tx, &search_param, &0)
-                .await
-                .unwrap();
-
-            assert_eq!(search.domains.len(), 50);
-            assert_eq!(search.page, 0);
-            assert_eq!(search.more, true);
-        }
-
-        {
-            let mut tx = pool.begin().await.unwrap();
-
-            let search_param = DomainSearchParam {
-                domain_name: None,
-                owner: None,
-                extra: None,
-            };
-
-            let search = domain_read_search(&mut tx, &search_param, &1)
-                .await
-                .unwrap();
-
-            assert_eq!(search.domains.len(), 1);
-            assert_eq!(search.page, 1);
-            assert_eq!(search.more, false);
-        }
-
-        {
-            let mut tx = pool.begin().await.unwrap();
-
-            let search_param = DomainSearchParam {
-                domain_name: Some("abcdef".to_string()),
-                owner: None,
-                extra: None,
-            };
-
-            let search = domain_read_search(&mut tx, &search_param, &0)
-                .await
-                .unwrap();
-
-            assert_eq!(search.domains.len(), 0);
-            assert_eq!(search.page, 0);
-            assert_eq!(search.more, false);
-        }
-
-        {
-            let mut tx = pool.begin().await.unwrap();
-
-            let search_param = DomainSearchParam {
-                domain_name: Some("foobar".to_string()),
-                owner: None,
-                extra: None,
-            };
-
-            let search = domain_read_search(&mut tx, &search_param, &0)
-                .await
-                .unwrap();
-
-            assert_eq!(search.domains.len(), 1);
-            assert_eq!(search.domains[0].name, "foobar_domain");
-        }
-
-        {
-            let mut tx = pool.begin().await.unwrap();
-
-            let search_param = DomainSearchParam {
-                domain_name: Some("foobar".to_string()),
-                owner: Some("test.com".to_string()),
-                extra: None,
-            };
-
-            let search = domain_read_search(&mut tx, &search_param, &0)
-                .await
-                .unwrap();
-
-            assert_eq!(search.domains.len(), 1);
-            assert_eq!(search.domains[0].name, "foobar_domain");
-            assert_eq!(search.page, 0);
-            assert_eq!(search.more, false);
-        }
-
-        {
-            let mut tx = pool.begin().await.unwrap();
-
-            let search_param = DomainSearchParam {
-                domain_name: Some("foobar".to_string()),
-                owner: Some("test.com".to_string()),
-                extra: Some("abc".to_string()),
-            };
-
-            let search = domain_read_search(&mut tx, &search_param, &0)
-                .await
-                .unwrap();
-
-            assert_eq!(search.domains.len(), 1);
-            assert_eq!(search.domains[0].name, "foobar_domain");
-            assert_eq!(search.page, 0);
-            assert_eq!(search.more, false);
-        }
     }
 
     /// Test domain edit

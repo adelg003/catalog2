@@ -6,6 +6,7 @@ mod field;
 mod graph;
 mod model;
 mod pack;
+mod search;
 mod util;
 
 use crate::{api::api, auth::UserCred};
