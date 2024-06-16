@@ -1,8 +1,6 @@
 name: Rust Checks
 
 on:
-  push:
-    branches: []
   pull_request:
     branches: [ "main" ]
 
