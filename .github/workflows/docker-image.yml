@@ -6,7 +6,7 @@ on:
 
 jobs:
 
-  build-check:
+  docker-build-check:
 
     runs-on: ubuntu-latest
 
