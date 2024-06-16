@@ -1,9 +1,8 @@
-
 use crate::{
-    model::Model,
-    pack::{Pack},
-    search::core::{SearchDomainParam, SearchModelParam},
     domain::Domain,
+    model::Model,
+    pack::Pack,
+    search::core::{SearchDomainParam, SearchModelParam},
 };
 use sqlx::{Postgres, QueryBuilder, Transaction};
 
@@ -236,14 +235,11 @@ pub async fn search_pack_select(
     Ok(pack)
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        util::test_utils::{
-            gen_test_domain_json, post_test_domain, gen_test_model_json, post_test_model,
-        },
+    use crate::util::test_utils::{
+        gen_test_domain_json, gen_test_model_json, post_test_domain, post_test_model,
     };
     use pretty_assertions::assert_eq;
     use sqlx::PgPool;
@@ -251,7 +247,6 @@ mod tests {
     /// Test domain search
     #[sqlx::test]
     async fn test_search_domain(pool: PgPool) {
-
         // Domain to create
         let body = gen_test_domain_json("test_domain");
         post_test_domain(&body, &pool).await;
@@ -376,8 +371,6 @@ mod tests {
             assert_eq!(domains[0].name, "foobar_domain");
         }
     }
-    
-
 
     /// Test model search
     #[sqlx::test]
@@ -390,14 +383,13 @@ mod tests {
         let body = gen_test_domain_json("foobar_domain");
         post_test_domain(&body, &pool).await;
 
-
         // Model to create
         let body = gen_test_model_json("test_model", "test_domain");
         post_test_model(&body, &pool).await;
 
         let body = gen_test_model_json("test_model_2", "test_domain");
         post_test_model(&body, &pool).await;
-        
+
         let body = gen_test_model_json("foobar_model", "foobar_domain");
         post_test_model(&body, &pool).await;
 
@@ -570,7 +562,6 @@ mod tests {
             assert_eq!(models[0].name, "test_model_2");
         }
     }
-
 
     /// Test pack search
     #[test]

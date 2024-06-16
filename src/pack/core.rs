@@ -1,7 +1,7 @@
 use crate::{
     dependency::{dependencies_select, Dependency, DependencyType},
-    pack::db::{pack_drop, pack_insert, pack_select,  pack_update},
-    util::{dbx_validater},
+    pack::db::{pack_drop, pack_insert, pack_select, pack_update},
+    util::dbx_validater,
 };
 use chrono::{DateTime, Utc};
 use poem::{
@@ -89,7 +89,6 @@ pub struct PackParam {
     pub owner: String,
     pub extra: serde_json::Value,
 }
-
 
 /// Pack with dependencies
 #[derive(Object)]
@@ -229,7 +228,6 @@ mod tests {
     fn test_pack_read_not_found() {
         todo!();
     }
-
 
     /// Test pack update
     #[test]

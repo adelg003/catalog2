@@ -1,21 +1,17 @@
-
 use crate::{
-
-    search::db::{search_domain_select, search_model_select, search_pack_select},
-    model::Model,
-    pack::{Pack, RuntimeType, ComputeType},
-    util::{PAGE_SIZE},
     domain::Domain,
+    model::Model,
+    pack::{ComputeType, Pack, RuntimeType},
+    search::db::{search_domain_select, search_model_select, search_pack_select},
+    util::PAGE_SIZE,
 };
-use poem::{
-    error::{InternalServerError},
-};
+use poem::error::InternalServerError;
 use poem_openapi::Object;
 use sqlx::{Postgres, Transaction};
 
 /// Domain Search Results
 #[derive(Object)]
-pub struct SearchDomain{
+pub struct SearchDomain {
     domains: Vec<Domain>,
     page: u64,
     more: bool,
@@ -30,7 +26,7 @@ pub struct SearchDomainParam {
 
 /// Model Search Results
 #[derive(Object)]
-pub struct SearchModel{
+pub struct SearchModel {
     models: Vec<Model>,
     page: u64,
     more: bool,
@@ -46,7 +42,7 @@ pub struct SearchModelParam {
 
 /// Pack Search Results
 #[derive(Object)]
-pub struct SearchPack{
+pub struct SearchPack {
     packs: Vec<Pack>,
     page: u64,
     more: bool,
@@ -62,7 +58,6 @@ pub struct SearchPackParam {
     pub owner: Option<String>,
     pub extra: Option<String>,
 }
-
 
 /// Read details of many domains
 pub async fn search_domain_read(
@@ -151,14 +146,11 @@ pub async fn search_pack_read(
     })
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        util::test_utils::{
-            gen_test_domain_json, post_test_domain, gen_test_model_json, post_test_model,
-        },
+    use crate::util::test_utils::{
+        gen_test_domain_json, gen_test_model_json, post_test_domain, post_test_model,
     };
     use pretty_assertions::assert_eq;
     use sqlx::PgPool;
@@ -167,17 +159,13 @@ mod tests {
     #[sqlx::test]
     async fn test_search_domain_read(pool: PgPool) {
         {
-
             for index in 0..50 {
-
-        let body = gen_test_domain_json(&format!("test_domain_{index}"));
-        post_test_domain(&body, &pool).await;
+                let body = gen_test_domain_json(&format!("test_domain_{index}"));
+                post_test_domain(&body, &pool).await;
             }
 
-
-        let body = gen_test_domain_json(&format!("foobar_domain"));
-        post_test_domain(&body, &pool).await;
-
+            let body = gen_test_domain_json(&format!("foobar_domain"));
+            post_test_domain(&body, &pool).await;
         }
 
         {
@@ -302,19 +290,15 @@ mod tests {
         post_test_domain(&body, &pool).await;
 
         {
-
             for index in 0..50 {
-
-        // Model to create
-        let body = gen_test_model_json(&format!("test_model_{index}"), "test_domain");
-        post_test_model(&body, &pool).await;
+                // Model to create
+                let body = gen_test_model_json(&format!("test_model_{index}"), "test_domain");
+                post_test_model(&body, &pool).await;
             }
 
-
-        // Model to create
-        let body = gen_test_model_json(&format!("foobar_model"), "foobar_domain");
-        post_test_model(&body, &pool).await;
-
+            // Model to create
+            let body = gen_test_model_json(&format!("foobar_model"), "foobar_domain");
+            post_test_model(&body, &pool).await;
         }
 
         {

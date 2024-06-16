@@ -2,15 +2,12 @@ use crate::{
     api::Tag,
     auth::{Auth, TokenAuth},
     pack::core::{
-        pack_add, pack_edit, pack_read,  pack_read_with_children, pack_remove, Pack, PackChildren, PackParam,
+        pack_add, pack_edit, pack_read, pack_read_with_children, pack_remove, Pack, PackChildren,
+        PackParam,
     },
 };
 use poem::{error::InternalServerError, web::Data};
-use poem_openapi::{
-    param::{Path},
-    payload::Json,
-    OpenApi,
-};
+use poem_openapi::{param::Path, payload::Json, OpenApi};
 use sqlx::PgPool;
 
 /// Struct we will build our REST API / Webserver
@@ -100,7 +97,6 @@ impl PackApi {
 
         Ok(Json(pack))
     }
-
 
     /// Get a single model and its fields, and it dependencies
     #[oai(path = "/pack_with_children/:pack_name", method = "get", tag = Tag::PackWithChildren)]
@@ -198,5 +194,4 @@ mod tests {
     fn test_pack_delete_conflict() {
         todo!();
     }
-
 }

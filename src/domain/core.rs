@@ -1,11 +1,11 @@
 use crate::{
     domain::db::{
-        domain_drop, domain_insert, domain_select,  domain_update,
-        model_select_by_domain, pack_select_by_domain,
+        domain_drop, domain_insert, domain_select, domain_update, model_select_by_domain,
+        pack_select_by_domain,
     },
     model::Model,
     pack::Pack,
-    util::{dbx_validater},
+    util::dbx_validater,
 };
 use chrono::{DateTime, Utc};
 use poem::{
@@ -255,7 +255,6 @@ mod tests {
             "no rows returned by a query that expected to return at least one row"
         );
     }
-
 
     /// Test domain edit
     #[sqlx::test]

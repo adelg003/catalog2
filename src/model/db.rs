@@ -1,7 +1,7 @@
 use crate::{
     domain::domain_select,
     field::{DbxDataType, Field},
-    model::core::{Model, ModelParam, },
+    model::core::{Model, ModelParam},
 };
 use chrono::Utc;
 use sqlx::{query, query_as, Postgres, Transaction};
@@ -85,7 +85,6 @@ pub async fn model_select(
 
     Ok(model)
 }
-
 
 /// Update a model
 pub async fn model_update(
@@ -366,7 +365,6 @@ mod tests {
             err => panic!("Incorrect sqlx error type: {}", err),
         };
     }
-
 
     /// Test model update
     #[sqlx::test]

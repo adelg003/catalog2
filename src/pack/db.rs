@@ -1,6 +1,6 @@
 use crate::{
     domain::domain_select,
-    pack::core::{ComputeType, Pack, PackParam,  RuntimeType},
+    pack::core::{ComputeType, Pack, PackParam, RuntimeType},
 };
 use chrono::Utc;
 use sqlx::{query, query_as, Postgres, Transaction};
@@ -207,7 +207,6 @@ mod tests {
     fn test_pack_select_not_found() {
         todo!();
     }
-
 
     /// Test pack update
     #[test]

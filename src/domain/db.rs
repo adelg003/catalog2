@@ -1,5 +1,5 @@
 use crate::{
-    domain::core::{Domain, DomainParam },
+    domain::core::{Domain, DomainParam},
     model::Model,
     pack::{ComputeType, Pack, RuntimeType},
 };
@@ -80,7 +80,6 @@ pub async fn domain_select(
 
     Ok(domain)
 }
-
 
 /// Update a domain
 pub async fn domain_update(
@@ -333,7 +332,6 @@ mod tests {
             err => panic!("Incorrect sqlx error type: {}", err),
         };
     }
-
 
     /// Test domain update
     #[sqlx::test]

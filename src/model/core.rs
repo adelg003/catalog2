@@ -3,9 +3,9 @@ use crate::{
     field::{field_add, DbxDataType, Field, FieldParam},
     model::db::{
         field_drop_by_model, field_select_by_model, model_drop, model_insert, model_select,
-         model_update,
+        model_update,
     },
-    util::{dbx_validater},
+    util::dbx_validater,
 };
 use chrono::{DateTime, Utc};
 use poem::{
@@ -42,7 +42,6 @@ pub struct ModelParam {
     pub owner: String,
     pub extra: serde_json::Value,
 }
-
 
 /// Model with fields
 #[derive(Object)]
@@ -110,7 +109,6 @@ pub async fn model_read(
     // Pull model
     model_select(tx, model_name).await.map_err(NotFound)
 }
-
 
 /// Edit a Model
 pub async fn model_edit(
@@ -396,7 +394,6 @@ mod tests {
             "no rows returned by a query that expected to return at least one row",
         );
     }
-
 
     /// Test model update
     #[sqlx::test]

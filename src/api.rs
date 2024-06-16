@@ -1,7 +1,6 @@
 use crate::{
     auth::AuthApi, dependency::DependencyApi, domain::DomainApi, field::FieldApi, graph::GraphApi,
-    model::ModelApi, pack::PackApi,
-    search::SearchApi,
+    model::ModelApi, pack::PackApi, search::SearchApi,
 };
 use poem::Route;
 use poem_openapi::{OpenApiService, Tags};

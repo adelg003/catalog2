@@ -2,16 +2,12 @@ use crate::{
     api::Tag,
     auth::{Auth, TokenAuth},
     domain::core::{
-        domain_add, domain_edit, domain_read,  domain_read_with_children,
-        domain_remove, Domain, DomainChildren, DomainParam,
+        domain_add, domain_edit, domain_read, domain_read_with_children, domain_remove, Domain,
+        DomainChildren, DomainParam,
     },
 };
 use poem::{error::InternalServerError, web::Data};
-use poem_openapi::{
-    param::{Path},
-    payload::Json,
-    OpenApi,
-};
+use poem_openapi::{param::Path, payload::Json, OpenApi};
 use sqlx::PgPool;
 
 /// Struct we will build our REST API / Webserver
@@ -101,7 +97,6 @@ impl DomainApi {
 
         Ok(Json(domain))
     }
-
 
     /// Get a single domain and its models
     #[oai(path = "/domain_with_children/:domain_name", method = "get", tag = Tag::DomainWithChildren)]
@@ -560,7 +555,6 @@ mod tests {
             .assert_text("update or delete on table \"domain\" violates foreign key constraint \"model_domain_id_fkey\" on table \"model\"")
             .await;
     }
-
 
     /// Test Reading domain with models
     #[sqlx::test]

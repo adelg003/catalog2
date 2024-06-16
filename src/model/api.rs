@@ -2,17 +2,13 @@ use crate::{
     api::Tag,
     auth::{Auth, TokenAuth},
     model::core::{
-        model_add, model_add_with_fields, model_edit, model_read,
-        model_read_with_children, model_read_with_fields, model_remove, model_remove_with_fields,
-        Model, ModelChildren, ModelFields, ModelFieldsParam, ModelParam,
+        model_add, model_add_with_fields, model_edit, model_read, model_read_with_children,
+        model_read_with_fields, model_remove, model_remove_with_fields, Model, ModelChildren,
+        ModelFields, ModelFieldsParam, ModelParam,
     },
 };
 use poem::{error::InternalServerError, web::Data};
-use poem_openapi::{
-    param::{Path},
-    payload::Json,
-    OpenApi,
-};
+use poem_openapi::{param::Path, payload::Json, OpenApi};
 use sqlx::PgPool;
 
 /// Struct we will build our REST API / Webserver
@@ -102,7 +98,6 @@ impl ModelApi {
 
         Ok(Json(model))
     }
-
 
     /// Add a model to the model table
     #[oai(path = "/model_with_fields", method = "post", tag = Tag::ModelWithFields)]
@@ -716,7 +711,6 @@ mod tests {
         response.assert_status(StatusCode::CONFLICT);
         response.assert_text("update or delete on table \"model\" violates foreign key constraint \"field_model_id_fkey\" on table \"field\"").await;
     }
-
 
     /// Test adding a model with fields
     #[sqlx::test]

@@ -1,15 +1,13 @@
-
 use crate::{
     api::Tag,
-    search::core::{search_domain_read, SearchDomain, SearchModelParam, search_model_read, search_pack_read, SearchPack, SearchPackParam},
-    pack::{RuntimeType, ComputeType}
+    pack::{ComputeType, RuntimeType},
+    search::core::{
+        search_domain_read, search_model_read, search_pack_read, SearchDomain, SearchModelParam,
+        SearchPack, SearchPackParam,
+    },
 };
 use poem::{error::InternalServerError, web::Data};
-use poem_openapi::{
-    param::{Query},
-    payload::Json,
-    OpenApi,
-};
+use poem_openapi::{param::Query, payload::Json, OpenApi};
 use sqlx::PgPool;
 
 use super::core::{SearchDomainParam, SearchModel};
@@ -19,7 +17,6 @@ pub struct SearchApi;
 
 #[OpenApi]
 impl SearchApi {
-
     /// Search domains
     #[oai(path = "/search/domain", method = "get", tag = Tag::Search)]
     async fn search_domain_get(
@@ -75,7 +72,7 @@ impl SearchApi {
         let mut tx = pool.begin().await.map_err(InternalServerError)?;
 
         // Pull models
-        let search_model= search_model_read(&mut tx, &search_param, &page).await?;
+        let search_model = search_model_read(&mut tx, &search_param, &page).await?;
 
         Ok(Json(search_model))
     }
@@ -113,7 +110,7 @@ impl SearchApi {
         let mut tx = pool.begin().await.map_err(InternalServerError)?;
 
         // Pull packs
-        let search_pack= search_pack_read(&mut tx, &search_param, &page).await?;
+        let search_pack = search_pack_read(&mut tx, &search_param, &page).await?;
 
         Ok(Json(search_pack))
     }
@@ -125,7 +122,7 @@ mod tests {
     use crate::util::test_utils::{
         gen_test_domain_json, gen_test_model_json, post_test_domain, post_test_model,
     };
-    use poem::{test::TestClient};
+    use poem::test::TestClient;
     use poem_openapi::OpenApiService;
 
     /// Test domain search
