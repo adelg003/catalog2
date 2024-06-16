@@ -104,3 +104,29 @@ jobs:
         sqlx migrate run
     - name: Tests
       run: cargo test
+
+  sqlx-cache:
+    runs-on: ubuntu-latest
+    needs: sqlx-cli
+    services:
+      postgres:
+        image: postgres
+        env:
+          POSTGRES_DB: catalog2
+          POSTGRES_USER: catalog2
+          POSTGRES_PASSWORD: password
+        ports:
+        - 5432:5432
+    steps:
+    - uses: actions/checkout@v4
+    - name: Get SQLx-CLI
+      uses: actions/download-artifact@v4
+      with:
+        name: sqlx-cli
+        path: /home/runner/.local/bin
+    - name: Migrate DB
+      run: |
+        chmod +x /home/runner/.local/bin/sqlx
+        sqlx migrate run
+    - name: Tests
+      run: cargo sqlx prepare --check
