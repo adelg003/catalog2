@@ -5,7 +5,7 @@ use crate::{
         field_drop_by_model, field_select_by_model, model_drop, model_insert, model_select,
          model_update,
     },
-    util::{dbx_validater, PAGE_SIZE},
+    util::{dbx_validater},
 };
 use chrono::{DateTime, Utc};
 use poem::{

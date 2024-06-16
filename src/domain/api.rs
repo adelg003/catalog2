@@ -8,7 +8,7 @@ use crate::{
 };
 use poem::{error::InternalServerError, web::Data};
 use poem_openapi::{
-    param::{Path, Query},
+    param::{Path},
     payload::Json,
     OpenApi,
 };

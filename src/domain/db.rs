@@ -4,7 +4,7 @@ use crate::{
     pack::{ComputeType, Pack, RuntimeType},
 };
 use chrono::Utc;
-use sqlx::{query_as, Postgres, QueryBuilder, Transaction};
+use sqlx::{query_as, Postgres, Transaction};
 
 /// Add a domain to the domain table
 pub async fn domain_insert(

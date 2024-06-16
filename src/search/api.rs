@@ -1,13 +1,12 @@
 
 use crate::{
     api::Tag,
-    auth::{Auth, TokenAuth},
     search::core::{search_domain_read, SearchDomain, SearchModelParam, search_model_read, search_pack_read, SearchPack, SearchPackParam},
     pack::{RuntimeType, ComputeType}
 };
 use poem::{error::InternalServerError, web::Data};
 use poem_openapi::{
-    param::{Path, Query},
+    param::{Query},
     payload::Json,
     OpenApi,
 };
@@ -124,10 +123,9 @@ impl SearchApi {
 mod tests {
     use super::*;
     use crate::util::test_utils::{
-        gen_jwt_encode_decode_token, gen_test_domain_json, gen_test_model_json, gen_test_pack_json,
-        gen_test_user_creds, post_test_domain, post_test_model, post_test_pack,
+        gen_test_domain_json, gen_test_model_json, post_test_domain, post_test_model,
     };
-    use poem::{http::StatusCode, test::TestClient};
+    use poem::{test::TestClient};
     use poem_openapi::OpenApiService;
 
     /// Test domain search

@@ -4,18 +4,14 @@ use crate::{
     search::db::{search_domain_select, search_model_select, search_pack_select},
     model::Model,
     pack::{Pack, RuntimeType, ComputeType},
-    util::{dbx_validater, PAGE_SIZE},
+    util::{PAGE_SIZE},
     domain::Domain,
 };
-use chrono::{DateTime, Utc};
 use poem::{
-    error::{BadRequest, Conflict, InternalServerError, NotFound},
-    http::StatusCode,
+    error::{InternalServerError},
 };
 use poem_openapi::Object;
-use serde::Serialize;
-use sqlx::{FromRow, Postgres, Transaction};
-use validator::Validate;
+use sqlx::{Postgres, Transaction};
 
 /// Domain Search Results
 #[derive(Object)]
@@ -160,15 +156,11 @@ pub async fn search_pack_read(
 mod tests {
     use super::*;
     use crate::{
-        pack::{ComputeType, RuntimeType},
-
         util::test_utils::{
-            gen_test_domain_json, gen_test_field_json, post_test_domain, post_test_field, gen_test_model_json, post_test_model,
-             gen_test_pack_json,  post_test_pack,
+            gen_test_domain_json, post_test_domain, gen_test_model_json, post_test_model,
         },
     };
     use pretty_assertions::assert_eq;
-    use serde_json::json;
     use sqlx::PgPool;
 
     /// Test domain search

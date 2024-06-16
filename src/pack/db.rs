@@ -3,7 +3,7 @@ use crate::{
     pack::core::{ComputeType, Pack, PackParam,  RuntimeType},
 };
 use chrono::Utc;
-use sqlx::{query, query_as, Postgres, QueryBuilder, Transaction};
+use sqlx::{query, query_as, Postgres, Transaction};
 
 /// Add a pack to the pack table
 pub async fn pack_insert(

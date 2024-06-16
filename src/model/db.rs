@@ -4,7 +4,7 @@ use crate::{
     model::core::{Model, ModelParam, },
 };
 use chrono::Utc;
-use sqlx::{query, query_as, Postgres, QueryBuilder, Transaction};
+use sqlx::{query, query_as, Postgres, Transaction};
 
 /// Add a model to the model table
 pub async fn model_insert(

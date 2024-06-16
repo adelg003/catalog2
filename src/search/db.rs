@@ -1,12 +1,11 @@
 
 use crate::{
     model::Model,
-    pack::{ComputeType, Pack, RuntimeType},
-    search::core::{SearchDomainParam, SearchDomain, SearchModel, SearchModelParam},
+    pack::{Pack},
+    search::core::{SearchDomainParam, SearchModelParam},
     domain::Domain,
 };
-use chrono::Utc;
-use sqlx::{query_as, Postgres, QueryBuilder, Transaction};
+use sqlx::{Postgres, QueryBuilder, Transaction};
 
 use super::core::SearchPackParam;
 
@@ -243,11 +242,10 @@ mod tests {
     use super::*;
     use crate::{
         util::test_utils::{
-            gen_test_domain_json, gen_test_field_json, post_test_domain, post_test_field, gen_test_model_json, post_test_model,
+            gen_test_domain_json, post_test_domain, gen_test_model_json, post_test_model,
         },
     };
     use pretty_assertions::assert_eq;
-    use serde_json::json;
     use sqlx::PgPool;
 
     /// Test domain search
