@@ -3,7 +3,7 @@ use crate::{
     field::{field_add, DbxDataType, Field, FieldParam},
     model::db::{
         field_drop_by_model, field_select_by_model, model_drop, model_insert, model_select,
-        model_select_search, model_update,
+         model_update,
     },
     util::{dbx_validater, PAGE_SIZE},
 };
@@ -43,21 +43,6 @@ pub struct ModelParam {
     pub extra: serde_json::Value,
 }
 
-/// Model Search Results
-#[derive(Object)]
-pub struct ModelSearch {
-    models: Vec<Model>,
-    page: u64,
-    more: bool,
-}
-
-/// Params for searching for models
-pub struct ModelSearchParam {
-    pub model_name: Option<String>,
-    pub domain_name: Option<String>,
-    pub owner: Option<String>,
-    pub extra: Option<String>,
-}
 
 /// Model with fields
 #[derive(Object)]
@@ -126,34 +111,6 @@ pub async fn model_read(
     model_select(tx, model_name).await.map_err(NotFound)
 }
 
-/// Read details of many models
-pub async fn model_read_search(
-    tx: &mut Transaction<'_, Postgres>,
-    search_param: &ModelSearchParam,
-    page: &u64,
-) -> Result<ModelSearch, poem::Error> {
-    // Compute offset
-    let offset = page * PAGE_SIZE;
-    let next_offset = (page + 1) * PAGE_SIZE;
-
-    // Pull the Models
-    let models = model_select_search(tx, search_param, &Some(PAGE_SIZE), &Some(offset))
-        .await
-        .map_err(InternalServerError)?;
-
-    // More models present?
-    let next_model = model_select_search(tx, search_param, &Some(PAGE_SIZE), &Some(next_offset))
-        .await
-        .map_err(InternalServerError)?;
-
-    let more = !next_model.is_empty();
-
-    Ok(ModelSearch {
-        models,
-        page: *page,
-        more,
-    })
-}
 
 /// Edit a Model
 pub async fn model_edit(
@@ -440,169 +397,6 @@ mod tests {
         );
     }
 
-    /// Test model search
-    #[sqlx::test]
-    async fn test_model_read_search(pool: PgPool) {
-        // Domain to create
-        let body = gen_test_domain_json("test_domain");
-        post_test_domain(&body, &pool).await;
-
-        // Domain to create
-        let body = gen_test_domain_json("foobar_domain");
-        post_test_domain(&body, &pool).await;
-
-        {
-            let mut tx = pool.begin().await.unwrap();
-
-            for index in 0..50 {
-                let model_param =
-                    gen_test_model_param(&format!("test_model_{index}"), "test_domain");
-                model_insert(&mut tx, &model_param, "test").await.unwrap();
-            }
-
-            let model_param = gen_test_model_param("foobar_model", "foobar_domain");
-            model_insert(&mut tx, &model_param, "foobar").await.unwrap();
-
-            tx.commit().await.unwrap();
-        }
-
-        {
-            let mut tx = pool.begin().await.unwrap();
-
-            let search_param = ModelSearchParam {
-                model_name: None,
-                domain_name: None,
-                owner: None,
-                extra: None,
-            };
-
-            let search = model_read_search(&mut tx, &search_param, &0).await.unwrap();
-
-            assert_eq!(search.models.len(), 50);
-            assert_eq!(search.page, 0);
-            assert_eq!(search.more, true);
-        }
-
-        {
-            let mut tx = pool.begin().await.unwrap();
-
-            let search_param = ModelSearchParam {
-                model_name: None,
-                domain_name: None,
-                owner: None,
-                extra: None,
-            };
-
-            let search = model_read_search(&mut tx, &search_param, &1).await.unwrap();
-
-            assert_eq!(search.models.len(), 1);
-            assert_eq!(search.page, 1);
-            assert_eq!(search.more, false);
-        }
-
-        {
-            let mut tx = pool.begin().await.unwrap();
-
-            let search_param = ModelSearchParam {
-                model_name: Some("test".to_string()),
-                domain_name: None,
-                owner: None,
-                extra: None,
-            };
-
-            let search = model_read_search(&mut tx, &search_param, &0).await.unwrap();
-
-            assert_eq!(search.models.len(), 50);
-            assert_eq!(search.page, 0);
-            assert_eq!(search.more, false);
-        }
-
-        {
-            let mut tx = pool.begin().await.unwrap();
-
-            let search_param = ModelSearchParam {
-                model_name: Some("abcdef".to_string()),
-                domain_name: None,
-                owner: None,
-                extra: None,
-            };
-
-            let search = model_read_search(&mut tx, &search_param, &0).await.unwrap();
-
-            assert_eq!(search.models.len(), 0);
-            assert_eq!(search.page, 0);
-            assert_eq!(search.more, false);
-        }
-
-        {
-            let mut tx = pool.begin().await.unwrap();
-
-            let search_param = ModelSearchParam {
-                model_name: Some("foobar".to_string()),
-                domain_name: None,
-                owner: None,
-                extra: None,
-            };
-
-            let search = model_read_search(&mut tx, &search_param, &0).await.unwrap();
-
-            assert_eq!(search.models.len(), 1);
-            assert_eq!(search.models[0].name, "foobar_model");
-        }
-
-        {
-            let mut tx = pool.begin().await.unwrap();
-
-            let search_param = ModelSearchParam {
-                model_name: None,
-                domain_name: Some("test".to_string()),
-                owner: None,
-                extra: None,
-            };
-
-            let search = model_read_search(&mut tx, &search_param, &0).await.unwrap();
-
-            assert_eq!(search.models.len(), 50);
-            assert_eq!(search.page, 0);
-            assert_eq!(search.more, false);
-        }
-
-        {
-            let mut tx = pool.begin().await.unwrap();
-
-            let search_param = ModelSearchParam {
-                model_name: Some("foobar".to_string()),
-                domain_name: None,
-                owner: Some("test.com".to_string()),
-                extra: None,
-            };
-
-            let search = model_read_search(&mut tx, &search_param, &0).await.unwrap();
-
-            assert_eq!(search.models.len(), 1);
-            assert_eq!(search.models[0].name, "foobar_model");
-            assert_eq!(search.page, 0);
-            assert_eq!(search.more, false);
-        }
-
-        {
-            let mut tx = pool.begin().await.unwrap();
-
-            let search_param = ModelSearchParam {
-                model_name: Some("foobar".to_string()),
-                domain_name: None,
-                owner: Some("test.com".to_string()),
-                extra: Some("abc".to_string()),
-            };
-
-            let search = model_read_search(&mut tx, &search_param, &0).await.unwrap();
-
-            assert_eq!(search.models.len(), 1);
-            assert_eq!(search.models[0].name, "foobar_model");
-            assert_eq!(search.page, 0);
-            assert_eq!(search.more, false);
-        }
-    }
 
     /// Test model update
     #[sqlx::test]

@@ -2,8 +2,8 @@ use crate::{
     api::Tag,
     auth::{Auth, TokenAuth},
     pack::core::{
-        pack_add, pack_edit, pack_read, pack_read_search, pack_read_with_children, pack_remove,
-        ComputeType, Pack, PackChildren, PackParam, PackSearch, PackSearchParam, RuntimeType,
+        pack_add, pack_edit, pack_read,  pack_read_with_children, pack_remove,
+        ComputeType, Pack, PackChildren, PackParam,  RuntimeType,
     },
 };
 use poem::{error::InternalServerError, web::Data};
@@ -102,43 +102,6 @@ impl PackApi {
         Ok(Json(pack))
     }
 
-    /// Search pack
-    #[oai(path = "/search/pack", method = "get", tag = Tag::Search)]
-    #[allow(clippy::too_many_arguments)]
-    async fn pack_get_search(
-        &self,
-        Data(pool): Data<&PgPool>,
-        Query(pack_name): Query<Option<String>>,
-        Query(domain_name): Query<Option<String>>,
-        Query(runtime): Query<Option<RuntimeType>>,
-        Query(compute): Query<Option<ComputeType>>,
-        Query(repo): Query<Option<String>>,
-        Query(owner): Query<Option<String>>,
-        Query(extra): Query<Option<String>>,
-        Query(page): Query<Option<u64>>,
-    ) -> Result<Json<PackSearch>, poem::Error> {
-        // Default no page to 0
-        let page = page.unwrap_or(0);
-
-        // Search Params
-        let search_param = PackSearchParam {
-            pack_name,
-            domain_name,
-            runtime,
-            compute,
-            repo,
-            owner,
-            extra,
-        };
-
-        // Start Transaction
-        let mut tx = pool.begin().await.map_err(InternalServerError)?;
-
-        // Pull packs
-        let pack_search = pack_read_search(&mut tx, &search_param, &page).await?;
-
-        Ok(Json(pack_search))
-    }
 
     /// Get a single model and its fields, and it dependencies
     #[oai(path = "/pack_with_children/:pack_name", method = "get", tag = Tag::PackWithChildren)]
@@ -237,10 +200,4 @@ mod tests {
         todo!();
     }
 
-    /// Test pack search
-    #[test]
-    #[should_panic]
-    fn test_pack_get_search() {
-        todo!();
-    }
 }

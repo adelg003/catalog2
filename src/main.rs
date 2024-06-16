@@ -7,6 +7,7 @@ mod graph;
 mod model;
 mod pack;
 mod util;
+mod search;
 
 use crate::{api::api, auth::UserCred};
 use color_eyre::eyre;

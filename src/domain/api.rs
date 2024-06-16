@@ -2,8 +2,8 @@ use crate::{
     api::Tag,
     auth::{Auth, TokenAuth},
     domain::core::{
-        domain_add, domain_edit, domain_read, domain_read_search, domain_read_with_children,
-        domain_remove, Domain, DomainChildren, DomainParam, DomainSearch, DomainSearchParam,
+        domain_add, domain_edit, domain_read,  domain_read_with_children,
+        domain_remove, Domain, DomainChildren, DomainParam,
     },
 };
 use poem::{error::InternalServerError, web::Data};
@@ -102,34 +102,6 @@ impl DomainApi {
         Ok(Json(domain))
     }
 
-    /// Search domains
-    #[oai(path = "/search/domain", method = "get", tag = Tag::Search)]
-    async fn domain_get_search(
-        &self,
-        Data(pool): Data<&PgPool>,
-        Query(domain_name): Query<Option<String>>,
-        Query(owner): Query<Option<String>>,
-        Query(extra): Query<Option<String>>,
-        Query(page): Query<Option<u64>>,
-    ) -> Result<Json<DomainSearch>, poem::Error> {
-        // Default no page to 0
-        let page = page.unwrap_or(0);
-
-        // Search Params
-        let search_param = DomainSearchParam {
-            domain_name,
-            owner,
-            extra,
-        };
-
-        // Start Transaction
-        let mut tx = pool.begin().await.map_err(InternalServerError)?;
-
-        // Pull domain
-        let domain_search = domain_read_search(&mut tx, &search_param, &page).await?;
-
-        Ok(Json(domain_search))
-    }
 
     /// Get a single domain and its models
     #[oai(path = "/domain_with_children/:domain_name", method = "get", tag = Tag::DomainWithChildren)]
@@ -589,169 +561,6 @@ mod tests {
             .await;
     }
 
-    /// Test domain search
-    #[sqlx::test]
-    async fn test_domain_get_search(pool: PgPool) {
-        for index in 0..50 {
-            // Domain to create
-            let body = gen_test_domain_json(&format!("test_domain_{index}"));
-            post_test_domain(&body, &pool).await;
-        }
-
-        // Domain to create
-        let body = gen_test_domain_json("foobar_domain");
-        post_test_domain(&body, &pool).await;
-
-        // Test Client
-        let ep = OpenApiService::new(DomainApi, "test", "1.0");
-        let cli = TestClient::new(ep);
-
-        {
-            // Test Request
-            let response = cli
-                .get("/search/domain")
-                .header("Content-Type", "application/json; charset=utf-8")
-                .data(pool.clone())
-                .send()
-                .await;
-
-            // Check status
-            response.assert_status_is_ok();
-
-            // Check Values
-            let test_json = response.json().await;
-            let json_value = test_json.value();
-
-            json_value.object().get("domains").array().assert_len(50);
-            json_value.object().get("page").assert_i64(0);
-            json_value.object().get("more").assert_bool(true);
-        }
-
-        {
-            // Test Request
-            let response = cli
-                .get("/search/domain")
-                .header("Content-Type", "application/json; charset=utf-8")
-                .query("page", &1)
-                .data(pool.clone())
-                .send()
-                .await;
-
-            // Check status
-            response.assert_status_is_ok();
-
-            // Check Values
-            let test_json = response.json().await;
-            let json_value = test_json.value();
-
-            json_value.object().get("domains").array().assert_len(1);
-            json_value.object().get("page").assert_i64(1);
-            json_value.object().get("more").assert_bool(false);
-        }
-
-        {
-            // Test Request
-            let response = cli
-                .get("/search/domain")
-                .header("Content-Type", "application/json; charset=utf-8")
-                .query("domain_name", &"abcdef")
-                .data(pool.clone())
-                .send()
-                .await;
-
-            // Check status
-            response.assert_status_is_ok();
-
-            // Check Values
-            let test_json = response.json().await;
-            let json_value = test_json.value();
-
-            json_value.object().get("domains").array().assert_len(0);
-            json_value.object().get("page").assert_i64(0);
-            json_value.object().get("more").assert_bool(false);
-        }
-
-        {
-            // Test Request
-            let response = cli
-                .get("/search/domain")
-                .header("Content-Type", "application/json; charset=utf-8")
-                .query("domain_name", &"foobar")
-                .data(pool.clone())
-                .send()
-                .await;
-
-            // Check status
-            response.assert_status_is_ok();
-
-            // Check Values
-            let test_json = response.json().await;
-            let json_value = test_json.value();
-
-            json_value.object().get("domains").array().assert_len(1);
-            json_value.object().get("page").assert_i64(0);
-            json_value.object().get("more").assert_bool(false);
-
-            json_value.object().get("domains").object_array()[0]
-                .get("name")
-                .assert_string("foobar_domain");
-        }
-
-        {
-            // Test Request
-            let response = cli
-                .get("/search/domain")
-                .header("Content-Type", "application/json; charset=utf-8")
-                .query("domain_name", &"foobar")
-                .query("owner", &"test.com")
-                .data(pool.clone())
-                .send()
-                .await;
-
-            // Check status
-            response.assert_status_is_ok();
-
-            // Check Values
-            let test_json = response.json().await;
-            let json_value = test_json.value();
-
-            json_value.object().get("domains").array().assert_len(1);
-            json_value.object().get("page").assert_i64(0);
-            json_value.object().get("more").assert_bool(false);
-
-            json_value.object().get("domains").object_array()[0]
-                .get("name")
-                .assert_string("foobar_domain");
-        }
-
-        {
-            // Test Request
-            let response = cli
-                .get("/search/domain")
-                .header("Content-Type", "application/json; charset=utf-8")
-                .query("domain_name", &"foobar")
-                .query("owner", &"test.com")
-                .query("extra", &"abc")
-                .data(pool.clone())
-                .send()
-                .await;
-
-            // Check status
-            response.assert_status_is_ok();
-
-            // Check Values
-            let test_json = response.json().await;
-            let json_value = test_json.value();
-
-            json_value.object().get("domains").array().assert_len(1);
-            json_value.object().get("page").assert_i64(0);
-            json_value.object().get("more").assert_bool(false);
-
-            json_value.object().get("domains").object_array()[0]
-                .get("name")
-                .assert_string("foobar_domain");
-        }
-    }
 
     /// Test Reading domain with models
     #[sqlx::test]
