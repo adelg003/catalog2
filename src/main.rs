@@ -4,12 +4,13 @@ mod dependency;
 mod domain;
 mod field;
 mod graph;
+mod index;
 mod model;
 mod pack;
 mod search;
 mod util;
 
-use crate::{api::api, auth::UserCred};
+use crate::auth::UserCred;
 use color_eyre::eyre;
 use jsonwebtoken::{DecodingKey, EncodingKey};
 use poem::{listener::TcpListener, middleware::Tracing, EndpointExt, Route, Server};
@@ -49,9 +50,9 @@ async fn main() -> Result<(), eyre::Error> {
     // Route inbound traffic
     let route = Route::new()
         // Developer friendly locations
-        .nest("/api", api(&format!("http://{web_addr}/api")))
+        .nest("/api", api::route(&format!("http://{web_addr}/api")))
         // User friendly locations
-        //.at("/", index)
+        .at("/", index::route())
         // Global context to be shared
         .data(pool)
         .data(user_creds)

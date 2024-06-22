@@ -26,7 +26,7 @@ pub enum Tag {
 }
 
 /// Provide routs for the API endpoints
-pub fn api(api_url: &str) -> Route {
+pub fn route(api_url: &str) -> Route {
     // Collect all the APIs into one
     let api_collection = (
         AuthApi,
