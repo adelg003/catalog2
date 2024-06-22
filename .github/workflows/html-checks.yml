@@ -1,0 +1,15 @@
+name: HTML Checks
+
+on:
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  html-fmt:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v3
+      - name: Prettier
+        run: npx prettier --check templates/
