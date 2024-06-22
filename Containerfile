@@ -2,10 +2,11 @@
 FROM rust:latest as builder
 WORKDIR /usr/src/myapp
 COPY ./Cargo.* .
-COPY ./src ./src
 COPY ./migrations ./migrations
-COPY ./.sqlx ./.sqlx
 COPY ./password_hasher ./password_hasher
+COPY ./.sqlx ./.sqlx
+COPY ./src ./src
+COPY ./templates ./templates
 RUN SQLX_OFFLINE=true cargo install --path .
 
 # Copy compiled binary to runtime image
