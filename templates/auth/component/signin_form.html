@@ -1,0 +1,33 @@
+<div id="signin">
+  {% if let Some(error) = error %}
+  <!-- Error -->
+  <p style="color: red">Login failed: {{ error }}</p>
+  {% endif %}
+
+  <!-- Login form -->
+  <form>
+    <div>
+      <label>
+        Username:
+        <input
+          name="username"
+          type="text"
+          placeholder="Please enter your username here..."
+        />
+      </label>
+    </div>
+    <div>
+      <label>
+        Password:
+        <input
+          name="password"
+          type="password"
+          placeholder="Pleae enter your password here..."
+        />
+      </label>
+    </div>
+    <button hx-post="/auth/signin" hx-swap="outerHTML" hx-target="#signin">
+      Login
+    </button>
+  </form>
+</div>

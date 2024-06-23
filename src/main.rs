@@ -14,8 +14,12 @@ use crate::auth::UserCred;
 use color_eyre::eyre;
 use jsonwebtoken::{DecodingKey, EncodingKey};
 use poem::{
-    endpoint::EmbeddedFilesEndpoint, listener::TcpListener, middleware::Tracing, EndpointExt,
-    Route, Server,
+    endpoint::EmbeddedFilesEndpoint,
+    listener::TcpListener,
+    middleware::Tracing,
+    session::{CookieConfig, CookieSession},
+    web::cookie::CookieKey,
+    EndpointExt, Route, Server,
 };
 use rust_embed::Embed;
 use sqlx::{migrate, PgPool};
@@ -46,11 +50,12 @@ async fn main() -> Result<(), eyre::Error> {
     let web_addr: String = read_env_var("WEB_URL")?;
     let user_creds: Vec<UserCred> = serde_json::from_str(&read_env_var("USER_CREDS")?)?;
 
-    // Generate the encoding and decoding JWT keys
-    let jwt_key = read_env_var("JWT_KEY")?;
-    let jwt_key = jwt_key.as_bytes();
-    let encoding_key = EncodingKey::from_secret(jwt_key);
-    let decoding_key = DecodingKey::from_secret(jwt_key);
+    // Generate the encoding and decoding keys for JWT and Cookies
+    let secert_key = read_env_var("SECERT_KEY")?;
+    let secert_key = secert_key.as_bytes();
+    let encoding_key = EncodingKey::from_secret(secert_key);
+    let decoding_key = DecodingKey::from_secret(secert_key);
+    let cookie_key = CookieKey::from(secert_key);
 
     // Connect to DB and upgrade if needed.
     let pool = PgPool::connect(&conn_str).await?;
@@ -63,13 +68,15 @@ async fn main() -> Result<(), eyre::Error> {
         .nest("/assets", EmbeddedFilesEndpoint::<Assets>::new())
         // User friendly locations
         .at("/", index::route())
+        .nest("/auth", auth::route())
         // Global context to be shared
         .data(pool)
         .data(user_creds)
         .data(encoding_key)
         .data(decoding_key)
         // Utilites being added to our services
-        .with(Tracing);
+        .with(Tracing)
+        .with(CookieSession::new(CookieConfig::signed(cookie_key)));
 
     // Lets run our service
     Server::new(TcpListener::bind(web_addr)).run(route).await?;

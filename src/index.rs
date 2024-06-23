@@ -1,9 +1,17 @@
 use askama::Template;
-use poem::{error::InternalServerError, handler, web::Html, Route};
+use poem::{error::InternalServerError, handler, session::Session, web::Html, Route};
 
 #[derive(Template)]
 #[template(path = "index/page/index.html")]
-struct Index {}
+struct Index {
+    navbar: Navbar,
+}
+
+#[derive(Template)]
+#[template(path = "shared/component/navbar.html")]
+pub struct Navbar {
+    pub username: Option<String>,
+}
 
 /// Provide routs for the API endpoints
 pub fn route() -> Route {
@@ -11,9 +19,16 @@ pub fn route() -> Route {
 }
 
 #[handler]
-async fn index() -> Result<Html<String>, poem::Error> {
+async fn index(session: &Session) -> Result<Html<String>, poem::Error> {
+    // If we have the username from the cookies, use it
+    let username: Option<String> = session.get("username");
+
     // Render landing page
-    let index = Index {}.render().map_err(InternalServerError)?;
+    let index = Index {
+        navbar: Navbar { username },
+    }
+    .render()
+    .map_err(InternalServerError)?;
 
     Ok(Html(index))
 }
