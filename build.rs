@@ -17,12 +17,12 @@ fn main() {
     }
 
     // Create Assets directory
-    fs::create_dir_all("assets").unwrap();
+    fs::create_dir_all("assets/scripts").unwrap();
 
     // Populate Assets directory
     fs::copy(
         "node_modules/htmx.org/dist/htmx.min.js",
-        "assets/htmx.min.js",
+        "assets/scripts/htmx.min.js",
     )
     .unwrap();
 }
