@@ -13,8 +13,17 @@ mod util;
 use crate::auth::UserCred;
 use color_eyre::eyre;
 use jsonwebtoken::{DecodingKey, EncodingKey};
-use poem::{listener::TcpListener, middleware::Tracing, EndpointExt, Route, Server};
+use poem::{
+    endpoint::EmbeddedFilesEndpoint, listener::TcpListener, middleware::Tracing, EndpointExt,
+    Route, Server,
+};
+use rust_embed::Embed;
 use sqlx::{migrate, PgPool};
+
+/// Static files hosted via the webserver
+#[derive(Embed)]
+#[folder = "assets"]
+struct Assets;
 
 /// Read an environment variable or fall back to .env file
 fn read_env_var(env_var: &str) -> Result<String, dotenvy::Error> {
@@ -51,6 +60,7 @@ async fn main() -> Result<(), eyre::Error> {
     let route = Route::new()
         // Developer friendly locations
         .nest("/api", api::route(&format!("http://{web_addr}/api")))
+        .nest("/assets", EmbeddedFilesEndpoint::<Assets>::new())
         // User friendly locations
         .at("/", index::route())
         // Global context to be shared
