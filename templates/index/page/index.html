@@ -1,0 +1,32 @@
+<!-- prettier-ignore -->
+{% extends "shared/layout/base.html" %}
+
+{% block body %}
+
+<!-- Add the Navigation Bar -->
+{{ navbar|safe }}
+
+<!-- Add the header-->
+<header>
+  <h1>Catalog2</h1>
+  <h3>a Catalog that is trying to suck a little less</h3>
+</header>
+
+<main>
+  How would you like to search the Catalog?
+  <br />
+  <a href="/search/domain">
+    <button>Domain</button>
+  </a>
+  <a href="/search/model">
+    <button>Model</button>
+  </a>
+  <a href="/search/pack">
+    <button>Pack</button>
+  </a>
+  <br />
+
+  Select your search here
+</main>
+
+{% endblock %}

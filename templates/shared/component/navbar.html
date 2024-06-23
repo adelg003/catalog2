@@ -1,0 +1,15 @@
+<nav>
+  <a href="/search/domain">Domain</a>
+  /
+  <a href="/search/model">Model</a>
+  /
+  <a href="/search/pack">Pack</a>
+  <!-- prettier-ignore -->
+  {% if let Some(username) = username %}
+    / User: {{ username }}
+    / <a href="/auth/logout">Logout</a>
+  <!-- prettier-ignore -->
+  {% else %}
+    / <a href="/auth/signin">Login</a>
+  {% endif %}
+</nav>

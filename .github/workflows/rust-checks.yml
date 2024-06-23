@@ -1,0 +1,70 @@
+name: Rust Checks
+
+on:
+  pull_request:
+    branches: ["main"]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  rust-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check
+        run: SQLX_OFFLINE=true cargo check
+
+  rust-clippy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Clippy
+        run: SQLX_OFFLINE=true cargo clippy -- --deny warnings
+
+  rust-fmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Format
+        run: cargo fmt --check --verbose
+
+  rust-test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres
+        env:
+          POSTGRES_DB: catalog2
+          POSTGRES_USER: catalog2
+          POSTGRES_PASSWORD: password
+        ports:
+          - 5432:5432
+    steps:
+      - uses: actions/checkout@v4
+      - name: Get SQLx-CLI
+        run: cargo install sqlx-cli --no-default-features --features native-tls,postgres
+      - name: Migrate DB
+        run: sqlx migrate run
+      - name: Tests
+        run: cargo test
+
+  rust-sqlx-cache-check:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres
+        env:
+          POSTGRES_DB: catalog2
+          POSTGRES_USER: catalog2
+          POSTGRES_PASSWORD: password
+        ports:
+          - 5432:5432
+    steps:
+      - uses: actions/checkout@v4
+      - name: Get SQLx-CLI
+        run: cargo install sqlx-cli --no-default-features --features native-tls,postgres
+      - name: Migrate DB
+        run: sqlx migrate run
+      - name: sqlx Cache Check
+        run: cargo sqlx prepare --check

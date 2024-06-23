@@ -1,0 +1,19 @@
+<!-- prettier-ignore -->
+{% extends "shared/layout/base.html" %}
+
+{% block body %}
+
+<!-- Add the Navigation Bar -->
+{{ navbar|safe }}
+
+<!-- Add the header-->
+<header>
+  <h1>Login</h1>
+</header>
+
+<main>
+  <!-- Sign in form -->
+  {{ signin_form|safe }}
+</main>
+
+{% endblock %}

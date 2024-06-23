@@ -1,11 +1,21 @@
-# Compile image
+# Build image
 FROM rust:latest as builder
+
+# Setup Node
+RUN apt update && apt install --yes npm
+
+# Copy files to build Rust Application
 WORKDIR /usr/src/myapp
+COPY ./build.rs ./build.rs
 COPY ./Cargo.* .
-COPY ./src ./src
 COPY ./migrations ./migrations
-COPY ./.sqlx ./.sqlx
+COPY ./package.json ./package.json
 COPY ./password_hasher ./password_hasher
+COPY ./.sqlx ./.sqlx
+COPY ./src ./src
+COPY ./templates ./templates
+
+# Build Rust Application
 RUN SQLX_OFFLINE=true cargo install --path .
 
 # Copy compiled binary to runtime image

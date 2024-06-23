@@ -18,8 +18,8 @@ pub struct UserCred {
 
 /// Struct to return when authenticating
 #[derive(Debug, Object, PartialEq)]
-struct User {
-    username: String,
+pub struct User {
+    pub username: String,
 }
 
 const ONE_WEEK: u64 = 60 * 60 * 24 * 7;
@@ -70,7 +70,7 @@ impl Auth for BasicAuth {
 }
 
 /// How we authenticate for BasicAuth
-async fn basic_checker(req: &Request, basic: Basic) -> Option<User> {
+pub async fn basic_checker(req: &Request, basic: Basic) -> Option<User> {
     // Pull approved user creds
     let user_creds = req.data::<Vec<UserCred>>()?;
 
