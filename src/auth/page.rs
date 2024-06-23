@@ -92,7 +92,7 @@ async fn signin_form(
 
 /// Logout and purge some cookies
 #[handler]
-async fn logout(session: &Session) -> Response {
+fn logout(session: &Session) -> Response {
     session.purge();
 
     // Redirect back to home page

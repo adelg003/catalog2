@@ -62,7 +62,7 @@ async fn main() -> Result<(), eyre::Error> {
     migrate!().run(&pool).await?;
 
     // Route inbound traffic
-    let route = Route::new()
+    let app = Route::new()
         // Developer friendly locations
         .nest("/api", api::route(&format!("http://{web_addr}/api")))
         .nest("/assets", EmbeddedFilesEndpoint::<Assets>::new())
@@ -79,7 +79,7 @@ async fn main() -> Result<(), eyre::Error> {
         .with(CookieSession::new(CookieConfig::signed(cookie_key)));
 
     // Lets run our service
-    Server::new(TcpListener::bind(web_addr)).run(route).await?;
+    Server::new(TcpListener::bind(web_addr)).run(app).await?;
 
     Ok(())
 }
