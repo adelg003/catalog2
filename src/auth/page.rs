@@ -76,7 +76,7 @@ async fn signin_form(
         // Redirect back to home page
         Ok(Response::builder()
             .status(StatusCode::FOUND)
-            .header(header::LOCATION, "/")
+            .header("HX-Redirect", "/")
             .finish())
     } else {
         // Well, looks like user auth failed
@@ -93,7 +93,7 @@ async fn signin_form(
 /// Logout and purge some cookies
 #[handler]
 fn logout(session: &Session) -> Response {
-    session.purge();
+    session.clear();
 
     // Redirect back to home page
     Response::builder()

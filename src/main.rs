@@ -18,7 +18,7 @@ use poem::{
     listener::TcpListener,
     middleware::Tracing,
     session::{CookieConfig, CookieSession},
-    web::cookie::CookieKey,
+    web::cookie::{CookieKey, SameSite},
     EndpointExt, Route, Server,
 };
 use rust_embed::Embed;
@@ -56,6 +56,7 @@ async fn main() -> Result<(), eyre::Error> {
     let encoding_key = EncodingKey::from_secret(secert_key);
     let decoding_key = DecodingKey::from_secret(secert_key);
     let cookie_key = CookieKey::from(secert_key);
+    let cookie_config = CookieConfig::signed(cookie_key).same_site(SameSite::Lax);
 
     // Connect to DB and upgrade if needed.
     let pool = PgPool::connect(&conn_str).await?;
@@ -76,7 +77,7 @@ async fn main() -> Result<(), eyre::Error> {
         .data(decoding_key)
         // Utilites being added to our services
         .with(Tracing)
-        .with(CookieSession::new(CookieConfig::signed(cookie_key)));
+        .with(CookieSession::new(cookie_config));
 
     // Lets run our service
     Server::new(TcpListener::bind(web_addr)).run(app).await?;
