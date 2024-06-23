@@ -2,8 +2,7 @@
 FROM rust:latest as builder
 
 # Setup Node
-RUN apt update
-RUN apt install --yes npm
+RUN apt update && apt install --yes npm
 
 # Copy files to build Rust Application
 WORKDIR /usr/src/myapp
