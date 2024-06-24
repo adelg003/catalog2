@@ -13,7 +13,7 @@ use poem::{
     http::StatusCode,
 };
 use poem_openapi::Object;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, Postgres, Transaction};
 use validator::Validate;
 
@@ -31,7 +31,7 @@ pub struct Domain {
 }
 
 /// How to create a new domain
-#[derive(Debug, Object, Serialize, Validate)]
+#[derive(Debug, Deserialize, Object, Serialize, Validate)]
 pub struct DomainParam {
     #[validate(custom(function = dbx_validater))]
     pub name: String,

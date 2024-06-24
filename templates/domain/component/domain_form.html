@@ -1,0 +1,53 @@
+<fieldset id="domain_form">
+  <legend>Add Domain</legend>
+  {% if let Some(error) = error %}
+  <!-- Error -->
+  <span style="color: red">Adding Domain Failed: {{ error }}</span>
+  {% endif %}
+
+  <!-- Add Domain form -->
+  <form>
+    <label>
+      Domain Name:
+      <!-- prettier-ignore -->
+      <input
+        name="name"
+        type="text"
+        placeholder="Enter domain name here..."
+        {% if !has_access %} disabled {% endif %}
+      />
+    </label>
+    <br />
+    <label>
+      Owner:
+      <!-- prettier-ignore -->
+      <input
+        name="owner"
+        type="email"
+        placeholder="Enter owner's email here..."
+        {% if !has_access %} disabled {% endif %}
+      />
+    </label>
+    <br />
+    <label>
+      Extra:
+      <!-- prettier-ignore -->
+      <input
+        name="extra"
+        type="text"
+        placeholder="(Optional)"
+        {% if !has_access %} disabled {% endif %}
+      />
+    </label>
+    <br />
+    <!-- prettier-ignore -->
+    <button
+      hx-post="/domain"
+      hx-swap="outerHTML"
+      hx-target="#domain_form"
+      {% if !has_access %} disabled {% endif %}
+    >
+      Add 
+    </button>
+  </form>
+</fieldset>

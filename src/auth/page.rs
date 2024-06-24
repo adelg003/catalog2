@@ -14,9 +14,9 @@ use serde::Deserialize;
 /// Tempate for Signin page
 #[derive(Template)]
 #[template(path = "auth/page/signin.html")]
-struct Signin<'a> {
+struct Signin {
     navbar: Navbar,
-    signin_form: SigninForm<'a>,
+    signin_form: SigninForm,
 }
 
 /// Sign in page
@@ -25,30 +25,33 @@ fn signin(session: &Session) -> Result<Response, poem::Error> {
     let username: Option<String> = session.get("username");
 
     // Are we already signed in?
-    if username.is_some() {
-        // Redirect back to home page
-        Ok(Response::builder()
-            .status(StatusCode::FOUND)
-            .header(header::LOCATION, "/")
-            .finish())
-    } else {
-        // Ok, we are not signed in
-        let signin_html: String = Signin {
-            navbar: Navbar { username: None },
-            signin_form: SigninForm { error: None },
+    match username {
+        Some(_) => {
+            // Redirect back to home page
+            Ok(Response::builder()
+                .status(StatusCode::FOUND)
+                .header(header::LOCATION, "/")
+                .finish())
         }
-        .render()
-        .map_err(InternalServerError)?;
+        None => {
+            // Ok, we are not signed in
+            let signin: String = Signin {
+                navbar: Navbar { username: None },
+                signin_form: SigninForm { error: None },
+            }
+            .render()
+            .map_err(InternalServerError)?;
 
-        Ok(Html(signin_html).into_response())
+            Ok(Html(signin).into_response())
+        }
     }
 }
 
 /// Tempate for Signin form
 #[derive(Template)]
 #[template(path = "auth/component/signin_form.html")]
-struct SigninForm<'a> {
-    error: Option<&'a str>,
+struct SigninForm {
+    error: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -69,24 +72,27 @@ async fn signin_form(
         password: params.password,
     };
     // Do the creds match what we are expecting?
-    if let Some(user) = basic_checker(req, basic).await {
-        // Save the username if auth is good
-        session.set("username", user.username);
+    match basic_checker(req, basic).await {
+        Some(user) => {
+            // Save the username if auth is good
+            session.set("username", user.username);
 
-        // Redirect back to home page
-        Ok(Response::builder()
-            .status(StatusCode::FOUND)
-            .header("HX-Redirect", "/")
-            .finish())
-    } else {
-        // Well, looks like user auth failed
-        let signin_form_html: String = SigninForm {
-            error: Some("User authentiation failed"),
+            // Redirect back to home page
+            Ok(Response::builder()
+                .status(StatusCode::FOUND)
+                .header("HX-Redirect", "/")
+                .finish())
         }
-        .render()
-        .map_err(InternalServerError)?;
+        None => {
+            // Well, looks like user auth failed
+            let signin_form: String = SigninForm {
+                error: Some("User authentiation failed".to_string()),
+            }
+            .render()
+            .map_err(InternalServerError)?;
 
-        Ok(Html(signin_form_html).into_response())
+            Ok(Html(signin_form).into_response())
+        }
     }
 }
 

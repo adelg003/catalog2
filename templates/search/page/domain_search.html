@@ -1,0 +1,19 @@
+<!-- prettier-ignore -->
+{% extends "shared/layout/base.html" %}
+
+{% block body %}
+
+<!-- Add the Navigation Bar -->
+{{ navbar|safe }}
+
+<!-- Add the header-->
+<header>
+  <h1>Domain Search</h1>
+</header>
+
+<main>
+  <!-- Add a Domain -->
+  {{ domain_add|safe }}
+</main>
+
+{% endblock %}

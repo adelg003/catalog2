@@ -4,6 +4,6 @@ mod page;
 
 pub use crate::auth::{
     api::AuthApi,
-    core::{Auth, TokenAuth, UserCred},
+    core::{has_ui_access, Auth, TokenAuth, UserCred},
     page::route,
 };
