@@ -16,7 +16,7 @@ COPY ./src ./src
 COPY ./templates ./templates
 
 # Build Rust Application
-RUN SQLX_OFFLINE=true cargo install --path .
+RUN SQLX_OFFLINE=true cargo install --path --locked .
 
 # Copy compiled binary to runtime image
 FROM debian:latest
