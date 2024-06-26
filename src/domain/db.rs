@@ -1,10 +1,10 @@
 use crate::{
-    domain::core::{Domain, DomainParam},
+    domain::core::{Domain, DomainParam, SearchDomainParam},
     model::Model,
     pack::{ComputeType, Pack, RuntimeType},
 };
 use chrono::Utc;
-use sqlx::{query_as, Postgres, Transaction};
+use sqlx::{query_as, Postgres, QueryBuilder, Transaction};
 
 /// Add a domain to the domain table
 pub async fn domain_insert(
@@ -221,12 +221,80 @@ pub async fn pack_select_by_domain(
     Ok(pack)
 }
 
+/// Pull multiple domains that match by criteria
+pub async fn search_domain_select(
+    tx: &mut Transaction<'_, Postgres>,
+    search_param: &SearchDomainParam,
+    limit: &Option<u64>,
+    offset: &Option<u64>,
+) -> Result<Vec<Domain>, sqlx::Error> {
+    // Query we will be modifying
+    let mut query = QueryBuilder::<'_, Postgres>::new(
+        "SELECT
+            id,
+            name,
+            owner,
+            extra,
+            created_by,
+            created_date,
+            modified_by,
+            modified_date
+        FROM
+            domain",
+    );
+
+    // Should we add a WHERE statement?
+    if search_param.domain_name.is_some()
+        || search_param.owner.is_some()
+        || search_param.extra.is_some()
+    {
+        query.push(" WHERE ");
+
+        // Start building the WHERE statement with the "AND" separating the condition.
+        let mut separated = query.separated(" AND ");
+
+        // Fuzzy search
+        if let Some(domain_name) = &search_param.domain_name {
+            separated.push(format!("name ILIKE '%{domain_name}%'"));
+        }
+        if let Some(owner) = &search_param.owner {
+            separated.push(format!("owner ILIKE '%{owner}%'"));
+        }
+        if let Some(extra) = &search_param.extra {
+            separated.push(format!("extra::text ILIKE '%{extra}%'"));
+        }
+    }
+
+    // Add ORDER BY
+    query.push(" ORDER BY id ");
+
+    // Add LIMIT
+    if let Some(limit) = limit {
+        query.push(format!(" LIMIT {limit} "));
+
+        // Add OFFSET
+        if let Some(offset) = offset {
+            query.push(format!(" OFFSET {offset} "));
+        }
+    }
+
+    // Run our generated SQL statement
+    let domain = query
+        .build_query_as::<Domain>()
+        .fetch_all(&mut **tx)
+        .await?;
+
+    Ok(domain)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::{
         domain::util::test_utils::gen_test_domain_param,
-        util::test_utils::{gen_test_model_json, post_test_model},
+        util::test_utils::{
+            gen_test_domain_json, gen_test_model_json, post_test_domain, post_test_model,
+        },
     };
     use pretty_assertions::assert_eq;
     use serde_json::json;
@@ -561,5 +629,133 @@ mod tests {
     #[should_panic]
     fn test_pack_select_by_domain() {
         todo!();
+    }
+
+    /// Test domain search
+    #[sqlx::test]
+    async fn test_search_domain(pool: PgPool) {
+        // Domain to create
+        let body = gen_test_domain_json("test_domain");
+        post_test_domain(&body, &pool).await;
+
+        let body = gen_test_domain_json("foobar_domain");
+        post_test_domain(&body, &pool).await;
+
+        {
+            let mut tx = pool.begin().await.unwrap();
+
+            let search_param = SearchDomainParam {
+                domain_name: None,
+                owner: None,
+                extra: None,
+            };
+
+            let domains = search_domain_select(&mut tx, &search_param, &None, &None)
+                .await
+                .unwrap();
+
+            assert_eq!(domains.len(), 2);
+        }
+
+        {
+            let mut tx = pool.begin().await.unwrap();
+
+            let search_param = SearchDomainParam {
+                domain_name: Some("abcdef".to_string()),
+                owner: None,
+                extra: None,
+            };
+
+            let domains = search_domain_select(&mut tx, &search_param, &None, &None)
+                .await
+                .unwrap();
+
+            assert_eq!(domains.len(), 0);
+        }
+
+        {
+            let mut tx = pool.begin().await.unwrap();
+
+            let search_param = SearchDomainParam {
+                domain_name: Some("test".to_string()),
+                owner: None,
+                extra: None,
+            };
+
+            let domains = search_domain_select(&mut tx, &search_param, &None, &None)
+                .await
+                .unwrap();
+
+            assert_eq!(domains.len(), 1);
+            assert_eq!(domains[0].name, "test_domain");
+        }
+
+        {
+            let mut tx = pool.begin().await.unwrap();
+
+            let search_param = SearchDomainParam {
+                domain_name: Some("test".to_string()),
+                owner: Some("test.com".to_string()),
+                extra: None,
+            };
+
+            let domains = search_domain_select(&mut tx, &search_param, &None, &None)
+                .await
+                .unwrap();
+
+            assert_eq!(domains.len(), 1);
+            assert_eq!(domains[0].name, "test_domain");
+        }
+
+        {
+            let mut tx = pool.begin().await.unwrap();
+
+            let search_param = SearchDomainParam {
+                domain_name: Some("test".to_string()),
+                owner: Some("test.com".to_string()),
+                extra: Some("abc".to_string()),
+            };
+
+            let domains = search_domain_select(&mut tx, &search_param, &None, &None)
+                .await
+                .unwrap();
+
+            assert_eq!(domains.len(), 1);
+            assert_eq!(domains[0].name, "test_domain");
+        }
+
+        {
+            let mut tx = pool.begin().await.unwrap();
+
+            let search_param = SearchDomainParam {
+                domain_name: None,
+                owner: None,
+                extra: None,
+            };
+
+            let domains = search_domain_select(&mut tx, &search_param, &Some(1), &None)
+                .await
+                .unwrap();
+
+            assert_eq!(domains.len(), 1);
+            assert_eq!(domains[0].name, "test_domain");
+        }
+
+        {
+            let mut tx = pool.begin().await.unwrap();
+
+            let search_param = SearchDomainParam {
+                domain_name: None,
+                owner: None,
+                extra: None,
+            };
+
+            let domains = search_domain_select(&mut tx, &search_param, &Some(1), &Some(1))
+                .await
+                .unwrap();
+
+            assert_eq!(domains.len(), 1);
+            assert_eq!(domains[0].name, "foobar_domain");
+        }
     }
 }

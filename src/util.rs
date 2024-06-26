@@ -40,7 +40,10 @@ pub mod test_utils {
         pack::PackApi,
     };
     use jsonwebtoken::{DecodingKey, EncodingKey};
-    use poem::{test::TestClient, web::headers::Authorization};
+    use poem::{
+        test::{TestClient, TestResponse},
+        web::headers::Authorization,
+    };
     use poem_openapi::OpenApiService;
     use serde_json::json;
     use sqlx::PgPool;
@@ -77,7 +80,7 @@ pub mod test_utils {
         let cli = TestClient::new(ep);
 
         // Get JWT
-        let response = cli
+        let response: TestResponse = cli
             .post("/gen_token")
             .typed_header(Authorization::basic("test_user", "abc123"))
             .data(encoding_key.clone())
@@ -115,7 +118,7 @@ pub mod test_utils {
         let cli = TestClient::new(ep);
 
         // Create Domain
-        let response = cli
+        let response: TestResponse = cli
             .post("/domain")
             .header("X-API-Key", &token)
             .header("Content-Type", "application/json; charset=utf-8")
@@ -153,7 +156,7 @@ pub mod test_utils {
         let cli = TestClient::new(ep);
 
         // Create Domain
-        let response = cli
+        let response: TestResponse = cli
             .post("/model")
             .header("X-API-Key", &token)
             .header("Content-Type", "application/json; charset=utf-8")
@@ -195,7 +198,7 @@ pub mod test_utils {
         let cli = TestClient::new(ep);
 
         // Create Domain
-        let response = cli
+        let response: TestResponse = cli
             .post("/field")
             .header("X-API-Key", &token)
             .header("Content-Type", "application/json; charset=utf-8")
@@ -236,7 +239,7 @@ pub mod test_utils {
         let cli = TestClient::new(ep);
 
         // Create Domain
-        let response = cli
+        let response: TestResponse = cli
             .post("/pack")
             .header("X-API-Key", &token)
             .header("Content-Type", "application/json; charset=utf-8")

@@ -1,9 +1,9 @@
 use crate::{
     domain::domain_select,
-    pack::core::{ComputeType, Pack, PackParam, RuntimeType},
+    pack::core::{ComputeType, Pack, PackParam, RuntimeType, SearchPackParam},
 };
 use chrono::Utc;
-use sqlx::{query, query_as, Postgres, Transaction};
+use sqlx::{query, query_as, Postgres, QueryBuilder, Transaction};
 
 /// Add a pack to the pack table
 pub async fn pack_insert(
@@ -170,6 +170,94 @@ pub async fn pack_drop(
     Ok(pack)
 }
 
+/// Pull multiple packs that match the criteria
+pub async fn search_pack_select(
+    tx: &mut Transaction<'_, Postgres>,
+    search_param: &SearchPackParam,
+    limit: &Option<u64>,
+    offset: &Option<u64>,
+) -> Result<Vec<Pack>, sqlx::Error> {
+    // Query we will be modifying
+    let mut query = QueryBuilder::<'_, Postgres>::new(
+        "SELECT
+            pack.id,
+            pack.name,
+            pack.domain_id,
+            domain.name AS \"domain_name\",
+            pack.runtime,
+            pack.compute,
+            pack.repo,
+            pack.owner,
+            pack.extra,
+            pack.created_by,
+            pack.created_date,
+            pack.modified_by,
+            pack.modified_date
+        FROM
+            pack
+        LEFT JOIN
+            domain
+        ON
+            pack.domain_id = domain.id",
+    );
+
+    // Should we add a WHERE statement?
+    if search_param.pack_name.is_some()
+        || search_param.domain_name.is_some()
+        || search_param.runtime.is_some()
+        || search_param.compute.is_some()
+        || search_param.repo.is_some()
+        || search_param.owner.is_some()
+        || search_param.extra.is_some()
+    {
+        query.push(" WHERE ");
+
+        // Start building the WHERE statement with the "AND" separating the condition.
+        let mut separated = query.separated(" AND ");
+
+        // Fuzzy search
+        if let Some(pack_name) = &search_param.pack_name {
+            separated.push(format!("pack.name ILIKE '%{pack_name}%'"));
+        }
+        if let Some(domain_name) = &search_param.domain_name {
+            separated.push(format!("domain.name ILIKE '%{domain_name}%'"));
+        }
+        if let Some(runtime) = search_param.runtime {
+            separated.push(format!("pack.runtime = '{runtime}'"));
+        }
+        if let Some(compute) = search_param.compute {
+            separated.push(format!("pack.compute = '{compute}'"));
+        }
+        if let Some(repo) = &search_param.repo {
+            separated.push(format!("pack.repo ILIKE '%{repo}%'"));
+        }
+        if let Some(owner) = &search_param.owner {
+            separated.push(format!("pack.owner ILIKE '%{owner}%'"));
+        }
+        if let Some(extra) = &search_param.extra {
+            separated.push(format!("pack.extra::text ILIKE '%{extra}%'"));
+        }
+    }
+
+    // Add ORDER BY
+    query.push(" ORDER BY pack.id ");
+
+    // Add LIMIT
+    if let Some(limit) = limit {
+        query.push(format!(" LIMIT {limit} "));
+
+        // Add OFFSET
+        if let Some(offset) = offset {
+            query.push(format!(" OFFSET {offset} "));
+        }
+    }
+
+    // Run our generated SQL statement
+    let pack = query.build_query_as::<Pack>().fetch_all(&mut **tx).await?;
+
+    Ok(pack)
+}
+
 #[cfg(test)]
 mod tests {
 
@@ -247,6 +335,13 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_pack_drop_conflict() {
+        todo!();
+    }
+
+    /// Test pack search
+    #[test]
+    #[should_panic]
+    fn test_search_pack() {
         todo!();
     }
 }
