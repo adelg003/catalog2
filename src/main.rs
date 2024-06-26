@@ -7,7 +7,6 @@ mod graph;
 mod index;
 mod model;
 mod pack;
-mod search;
 mod util;
 
 use crate::auth::UserCred;

@@ -3,12 +3,16 @@ use crate::{
     auth::{Auth, TokenAuth},
     model::core::{
         model_add, model_add_with_fields, model_edit, model_read, model_read_with_children,
-        model_read_with_fields, model_remove, model_remove_with_fields, Model, ModelChildren,
-        ModelFields, ModelFieldsParam, ModelParam,
+        model_read_with_fields, model_remove, model_remove_with_fields, search_model_read, Model,
+        ModelChildren, ModelFields, ModelFieldsParam, ModelParam, SearchModel, SearchModelParam,
     },
 };
 use poem::{error::InternalServerError, web::Data};
-use poem_openapi::{param::Path, payload::Json, OpenApi};
+use poem_openapi::{
+    param::{Path, Query},
+    payload::Json,
+    OpenApi,
+};
 use sqlx::PgPool;
 
 /// Struct we will build our REST API / Webserver
@@ -173,6 +177,37 @@ impl ModelApi {
 
         Ok(Json(model_children))
     }
+
+    /// Search models
+    #[oai(path = "/search/model", method = "get", tag = Tag::Search)]
+    async fn search_model_get(
+        &self,
+        Data(pool): Data<&PgPool>,
+        Query(model_name): Query<Option<String>>,
+        Query(domain_name): Query<Option<String>>,
+        Query(owner): Query<Option<String>>,
+        Query(extra): Query<Option<String>>,
+        Query(page): Query<Option<u64>>,
+    ) -> Result<Json<SearchModel>, poem::Error> {
+        // Default no page to 0
+        let page = page.unwrap_or(0);
+
+        // Search Params
+        let search_param = SearchModelParam {
+            model_name,
+            domain_name,
+            owner,
+            extra,
+        };
+
+        // Start Transaction
+        let mut tx = pool.begin().await.map_err(InternalServerError)?;
+
+        // Pull models
+        let search_model = search_model_read(&mut tx, &search_param, &page).await?;
+
+        Ok(Json(search_model))
+    }
 }
 
 #[cfg(test)]
@@ -183,7 +218,10 @@ mod tests {
         gen_test_model_json, gen_test_user_creds, post_test_domain, post_test_field,
         post_test_model,
     };
-    use poem::{http::StatusCode, test::TestClient};
+    use poem::{
+        http::StatusCode,
+        test::{TestClient, TestResponse},
+    };
     use poem_openapi::OpenApiService;
     use serde_json::json;
     use sqlx::PgPool;
@@ -207,7 +245,7 @@ mod tests {
         let cli = TestClient::new(ep);
 
         // Test Request
-        let response = cli
+        let response: TestResponse = cli
             .post("/model")
             .header("X-API-Key", &token)
             .header("Content-Type", "application/json; charset=utf-8")
@@ -273,7 +311,7 @@ mod tests {
         let cli = TestClient::new(ep);
 
         // Test Request
-        let response = cli
+        let response: TestResponse = cli
             .post("/model")
             .header("X-API-Key", &token)
             .header("Content-Type", "application/json; charset=utf-8")
@@ -309,7 +347,7 @@ mod tests {
         let cli = TestClient::new(ep);
 
         // Test Request
-        let response = cli
+        let response: TestResponse = cli
             .post("/model")
             .header("X-API-Key", &token)
             .header("Content-Type", "application/json; charset=utf-8")
@@ -347,7 +385,7 @@ mod tests {
         let cli = TestClient::new(ep);
 
         // Test Request
-        let response = cli
+        let response: TestResponse = cli
             .get("/model/test_model")
             .header("X-API-Key", &token)
             .header("Content-Type", "application/json; charset=utf-8")
@@ -409,7 +447,7 @@ mod tests {
         let cli = TestClient::new(ep);
 
         // Test Request
-        let response = cli
+        let response: TestResponse = cli
             .get("/model/test_model")
             .header("X-API-Key", &token)
             .header("Content-Type", "application/json; charset=utf-8")
@@ -449,7 +487,7 @@ mod tests {
         let cli = TestClient::new(ep);
 
         // Test Request
-        let response = cli
+        let response: TestResponse = cli
             .put("/model/test_model")
             .header("X-API-Key", &token)
             .header("Content-Type", "application/json; charset=utf-8")
@@ -518,7 +556,7 @@ mod tests {
         let cli = TestClient::new(ep);
 
         // Test Request
-        let response = cli
+        let response: TestResponse = cli
             .put("/model/test_model")
             .header("X-API-Key", &token)
             .header("Content-Type", "application/json; charset=utf-8")
@@ -558,7 +596,7 @@ mod tests {
         let cli = TestClient::new(ep);
 
         // Test Request
-        let response = cli
+        let response: TestResponse = cli
             .put("/model/test_model")
             .header("X-API-Key", &token)
             .header("Content-Type", "application/json; charset=utf-8")
@@ -596,7 +634,7 @@ mod tests {
         let cli = TestClient::new(ep);
 
         // Test Request
-        let response = cli
+        let response: TestResponse = cli
             .delete("/model/test_model")
             .header("X-API-Key", &token)
             .header("Content-Type", "application/json; charset=utf-8")
@@ -658,7 +696,7 @@ mod tests {
         let cli = TestClient::new(ep);
 
         // Test Request
-        let response = cli
+        let response: TestResponse = cli
             .delete("/model/test_model")
             .header("X-API-Key", &token)
             .header("Content-Type", "application/json; charset=utf-8")
@@ -697,7 +735,7 @@ mod tests {
         let cli = TestClient::new(ep);
 
         // Test Request
-        let response = cli
+        let response: TestResponse = cli
             .delete("/model/test_model")
             .header("X-API-Key", &token)
             .header("Content-Type", "application/json; charset=utf-8")
@@ -737,7 +775,7 @@ mod tests {
         let cli = TestClient::new(ep);
 
         // Test Request
-        let response = cli
+        let response: TestResponse = cli
             .post("/model_with_fields")
             .header("X-API-Key", &token)
             .header("Content-Type", "application/json; charset=utf-8")
@@ -899,7 +937,7 @@ mod tests {
         let cli = TestClient::new(ep);
 
         // Test Request
-        let response = cli
+        let response: TestResponse = cli
             .get("/model_with_fields/test_model")
             .header("Content-Type", "application/json; charset=utf-8")
             .data(pool)
@@ -1061,7 +1099,7 @@ mod tests {
         let cli = TestClient::new(ep);
 
         // Test Request
-        let response = cli
+        let response: TestResponse = cli
             .delete("/model_with_fields/test_model")
             .header("X-API-Key", &token)
             .header("Content-Type", "application/json; charset=utf-8")
@@ -1198,7 +1236,7 @@ mod tests {
             .assert_string("test_user");
 
         // Test Request
-        let response = cli
+        let response: TestResponse = cli
             .delete("/model_fields/test_model")
             .header("X-API-Key", &token)
             .header("Content-Type", "application/json; charset=utf-8")
@@ -1211,5 +1249,217 @@ mod tests {
         // Check status
         response.assert_status(StatusCode::NOT_FOUND);
         response.assert_text("not found").await;
+    }
+
+    /// Test model search
+    #[sqlx::test]
+    async fn test_search_model_get(pool: PgPool) {
+        // Domain to create
+        let body = gen_test_domain_json("test_domain");
+        post_test_domain(&body, &pool).await;
+
+        // Model to create
+        for index in 0..50 {
+            let body = gen_test_model_json(&format!("test_model_{index}"), "test_domain");
+            post_test_model(&body, &pool).await;
+        }
+
+        // Domain to create
+        let body = gen_test_domain_json("foobar_domain");
+        post_test_domain(&body, &pool).await;
+
+        // Model to create
+        let body = gen_test_model_json("foobar_model", "foobar_domain");
+        post_test_model(&body, &pool).await;
+
+        // Test Client
+        let ep = OpenApiService::new(ModelApi, "test", "1.0");
+        let cli = TestClient::new(ep);
+
+        {
+            // Test Request
+            let response: TestResponse = cli
+                .get("/search/model")
+                .header("Content-Type", "application/json; charset=utf-8")
+                .data(pool.clone())
+                .send()
+                .await;
+
+            // Check status
+            response.assert_status_is_ok();
+
+            // Check Values
+            let test_json = response.json().await;
+            let json_value = test_json.value();
+
+            json_value.object().get("models").array().assert_len(50);
+            json_value.object().get("page").assert_i64(0);
+            json_value.object().get("more").assert_bool(true);
+        }
+
+        {
+            // Test Request
+            let response: TestResponse = cli
+                .get("/search/model")
+                .header("Content-Type", "application/json; charset=utf-8")
+                .query("page", &1)
+                .data(pool.clone())
+                .send()
+                .await;
+
+            // Check status
+            response.assert_status_is_ok();
+
+            // Check Values
+            let test_json = response.json().await;
+            let json_value = test_json.value();
+
+            json_value.object().get("models").array().assert_len(1);
+            json_value.object().get("page").assert_i64(1);
+            json_value.object().get("more").assert_bool(false);
+        }
+
+        {
+            // Test Request
+            let response: TestResponse = cli
+                .get("/search/model")
+                .header("Content-Type", "application/json; charset=utf-8")
+                .query("model_name", &"test")
+                .data(pool.clone())
+                .send()
+                .await;
+
+            // Check status
+            response.assert_status_is_ok();
+
+            // Check Values
+            let test_json = response.json().await;
+            let json_value = test_json.value();
+
+            json_value.object().get("models").array().assert_len(50);
+            json_value.object().get("page").assert_i64(0);
+            json_value.object().get("more").assert_bool(false);
+        }
+
+        {
+            // Test Request
+            let response: TestResponse = cli
+                .get("/search/model")
+                .header("Content-Type", "application/json; charset=utf-8")
+                .query("model_name", &"abcdef")
+                .data(pool.clone())
+                .send()
+                .await;
+
+            // Check status
+            response.assert_status_is_ok();
+
+            // Check Values
+            let test_json = response.json().await;
+            let json_value = test_json.value();
+
+            json_value.object().get("models").array().assert_len(0);
+            json_value.object().get("page").assert_i64(0);
+            json_value.object().get("more").assert_bool(false);
+        }
+
+        {
+            // Test Request
+            let response: TestResponse = cli
+                .get("/search/model")
+                .header("Content-Type", "application/json; charset=utf-8")
+                .query("model_name", &"foobar")
+                .data(pool.clone())
+                .send()
+                .await;
+
+            // Check status
+            response.assert_status_is_ok();
+
+            // Check Values
+            let test_json = response.json().await;
+            let json_value = test_json.value();
+
+            json_value.object().get("models").array().assert_len(1);
+            json_value.object().get("page").assert_i64(0);
+            json_value.object().get("more").assert_bool(false);
+        }
+
+        {
+            // Test Request
+            let response: TestResponse = cli
+                .get("/search/model")
+                .header("Content-Type", "application/json; charset=utf-8")
+                .query("domain_name", &"test")
+                .data(pool.clone())
+                .send()
+                .await;
+
+            // Check status
+            response.assert_status_is_ok();
+
+            // Check Values
+            let test_json = response.json().await;
+            let json_value = test_json.value();
+
+            json_value.object().get("models").array().assert_len(50);
+            json_value.object().get("page").assert_i64(0);
+            json_value.object().get("more").assert_bool(false);
+        }
+
+        {
+            // Test Request
+            let response: TestResponse = cli
+                .get("/search/model")
+                .header("Content-Type", "application/json; charset=utf-8")
+                .query("model_name", &"foobar")
+                .query("owner", &"test.com")
+                .data(pool.clone())
+                .send()
+                .await;
+
+            // Check status
+            response.assert_status_is_ok();
+
+            // Check Values
+            let test_json = response.json().await;
+            let json_value = test_json.value();
+
+            json_value.object().get("models").array().assert_len(1);
+            json_value.object().get("page").assert_i64(0);
+            json_value.object().get("more").assert_bool(false);
+
+            json_value.object().get("models").object_array()[0]
+                .get("name")
+                .assert_string("foobar_model");
+        }
+
+        {
+            // Test Request
+            let response: TestResponse = cli
+                .get("/search/model")
+                .header("Content-Type", "application/json; charset=utf-8")
+                .query("model_name", &"foobar")
+                .query("owner", &"test.com")
+                .query("extra", &"abc")
+                .data(pool.clone())
+                .send()
+                .await;
+
+            // Check status
+            response.assert_status_is_ok();
+
+            // Check Values
+            let test_json = response.json().await;
+            let json_value = test_json.value();
+
+            json_value.object().get("models").array().assert_len(1);
+            json_value.object().get("page").assert_i64(0);
+            json_value.object().get("more").assert_bool(false);
+
+            json_value.object().get("models").object_array()[0]
+                .get("name")
+                .assert_string("foobar_model");
+        }
     }
 }

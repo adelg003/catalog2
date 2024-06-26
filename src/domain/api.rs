@@ -2,12 +2,16 @@ use crate::{
     api::Tag,
     auth::{Auth, TokenAuth},
     domain::core::{
-        domain_add, domain_edit, domain_read, domain_read_with_children, domain_remove, Domain,
-        DomainChildren, DomainParam,
+        domain_add, domain_edit, domain_read, domain_read_with_children, domain_remove,
+        search_domain_read, Domain, DomainChildren, DomainParam, SearchDomain, SearchDomainParam,
     },
 };
 use poem::{error::InternalServerError, web::Data};
-use poem_openapi::{param::Path, payload::Json, OpenApi};
+use poem_openapi::{
+    param::{Path, Query},
+    payload::Json,
+    OpenApi,
+};
 use sqlx::PgPool;
 
 /// Struct we will build our REST API / Webserver
@@ -113,6 +117,35 @@ impl DomainApi {
 
         Ok(Json(domain))
     }
+
+    /// Search domains
+    #[oai(path = "/search/domain", method = "get", tag = Tag::Search)]
+    async fn search_domain_get(
+        &self,
+        Data(pool): Data<&PgPool>,
+        Query(domain_name): Query<Option<String>>,
+        Query(owner): Query<Option<String>>,
+        Query(extra): Query<Option<String>>,
+        Query(page): Query<Option<u64>>,
+    ) -> Result<Json<SearchDomain>, poem::Error> {
+        // Default no page to 0
+        let page = page.unwrap_or(0);
+
+        // Search Params
+        let search_param = SearchDomainParam {
+            domain_name,
+            owner,
+            extra,
+        };
+
+        // Start Transaction
+        let mut tx = pool.begin().await.map_err(InternalServerError)?;
+
+        // Pull domain
+        let search_domain = search_domain_read(&mut tx, &search_param, &page).await?;
+
+        Ok(Json(search_domain))
+    }
 }
 
 #[cfg(test)]
@@ -122,7 +155,10 @@ mod tests {
         gen_jwt_encode_decode_token, gen_test_domain_json, gen_test_model_json, gen_test_pack_json,
         gen_test_user_creds, post_test_domain, post_test_model, post_test_pack,
     };
-    use poem::{http::StatusCode, test::TestClient};
+    use poem::{
+        http::StatusCode,
+        test::{TestClient, TestResponse},
+    };
     use poem_openapi::OpenApiService;
 
     /// Test create domain
@@ -140,7 +176,7 @@ mod tests {
         let cli = TestClient::new(ep);
 
         // Test Request
-        let response = cli
+        let response: TestResponse = cli
             .post("/domain")
             .header("X-API-Key", &token)
             .header("Content-Type", "application/json; charset=utf-8")
@@ -202,7 +238,7 @@ mod tests {
         let cli = TestClient::new(ep);
 
         // Add conflicting record
-        let response = cli
+        let response: TestResponse = cli
             .post("/domain")
             .header("X-API-Key", &token)
             .header("Content-Type", "application/json; charset=utf-8")
@@ -230,7 +266,7 @@ mod tests {
         let cli = TestClient::new(ep);
 
         // Test Request
-        let response = cli
+        let response: TestResponse = cli
             .get("/domain/test_domain")
             .header("Content-Type", "application/json; charset=utf-8")
             .data(pool)
@@ -280,7 +316,7 @@ mod tests {
         let cli = TestClient::new(ep);
 
         // Test Request
-        let response = cli
+        let response: TestResponse = cli
             .get("/domain/test_domain")
             .header("Content-Type", "application/json; charset=utf-8")
             .data(pool)
@@ -313,7 +349,7 @@ mod tests {
         let cli = TestClient::new(ep);
 
         // Update existing record
-        let response = cli
+        let response: TestResponse = cli
             .put("/domain/test_domain")
             .header("X-API-Key", &token)
             .header("Content-Type", "application/json; charset=utf-8")
@@ -377,7 +413,7 @@ mod tests {
         let cli = TestClient::new(ep);
 
         // Add conflicting record
-        let response = cli
+        let response: TestResponse = cli
             .put("/domain/test_domain")
             .header("X-API-Key", &token)
             .header("Content-Type", "application/json; charset=utf-8")
@@ -413,7 +449,7 @@ mod tests {
         let cli = TestClient::new(ep);
 
         // Update existing record
-        let response = cli
+        let response: TestResponse = cli
             .put("/domain/test_domain")
             .header("X-API-Key", &token)
             .header("Content-Type", "application/json; charset=utf-8")
@@ -447,7 +483,7 @@ mod tests {
         let cli = TestClient::new(ep);
 
         // Delete existing record
-        let response = cli
+        let response: TestResponse = cli
             .delete("/domain/test_domain")
             .header("X-API-Key", &token)
             .header("Content-Type", "application/json; charset=utf-8")
@@ -504,7 +540,7 @@ mod tests {
         let cli = TestClient::new(ep);
 
         // Delete missing record
-        let response = cli
+        let response: TestResponse = cli
             .delete("/domain/test_domain")
             .header("X-API-Key", &token)
             .header("Content-Type", "application/json; charset=utf-8")
@@ -539,7 +575,7 @@ mod tests {
         let cli = TestClient::new(ep);
 
         // Delete existing record
-        let response = cli
+        let response: TestResponse = cli
             .delete("/domain/test_domain")
             .header("X-API-Key", &token)
             .header("Content-Type", "application/json; charset=utf-8")
@@ -588,7 +624,7 @@ mod tests {
         let cli = TestClient::new(ep);
 
         // Get existing record
-        let response = cli
+        let response: TestResponse = cli
             .get("/domain_with_children/test_domain")
             .header("X-API-Key", &token)
             .header("Content-Type", "application/json; charset=utf-8")
@@ -786,5 +822,169 @@ mod tests {
             .object()
             .get("modified_by")
             .assert_string("test_user");
+    }
+
+    /// Test domain search
+    #[sqlx::test]
+    async fn test_search_domain_get(pool: PgPool) {
+        for index in 0..50 {
+            // Domain to create
+            let body = gen_test_domain_json(&format!("test_domain_{index}"));
+            post_test_domain(&body, &pool).await;
+        }
+
+        // Domain to create
+        let body = gen_test_domain_json("foobar_domain");
+        post_test_domain(&body, &pool).await;
+
+        // Test Client
+        let ep = OpenApiService::new(DomainApi, "test", "1.0");
+        let cli = TestClient::new(ep);
+
+        {
+            // Test Request
+            let response: TestResponse = cli
+                .get("/search/domain")
+                .header("Content-Type", "application/json; charset=utf-8")
+                .data(pool.clone())
+                .send()
+                .await;
+
+            // Check status
+            response.assert_status_is_ok();
+
+            // Check Values
+            let test_json = response.json().await;
+            let json_value = test_json.value();
+
+            json_value.object().get("domains").array().assert_len(50);
+            json_value.object().get("page").assert_i64(0);
+            json_value.object().get("more").assert_bool(true);
+        }
+
+        {
+            // Test Request
+            let response: TestResponse = cli
+                .get("/search/domain")
+                .header("Content-Type", "application/json; charset=utf-8")
+                .query("page", &1)
+                .data(pool.clone())
+                .send()
+                .await;
+
+            // Check status
+            response.assert_status_is_ok();
+
+            // Check Values
+            let test_json = response.json().await;
+            let json_value = test_json.value();
+
+            json_value.object().get("domains").array().assert_len(1);
+            json_value.object().get("page").assert_i64(1);
+            json_value.object().get("more").assert_bool(false);
+        }
+
+        {
+            // Test Request
+            let response: TestResponse = cli
+                .get("/search/domain")
+                .header("Content-Type", "application/json; charset=utf-8")
+                .query("domain_name", &"abcdef")
+                .data(pool.clone())
+                .send()
+                .await;
+
+            // Check status
+            response.assert_status_is_ok();
+
+            // Check Values
+            let test_json = response.json().await;
+            let json_value = test_json.value();
+
+            json_value.object().get("domains").array().assert_len(0);
+            json_value.object().get("page").assert_i64(0);
+            json_value.object().get("more").assert_bool(false);
+        }
+
+        {
+            // Test Request
+            let response: TestResponse = cli
+                .get("/search/domain")
+                .header("Content-Type", "application/json; charset=utf-8")
+                .query("domain_name", &"foobar")
+                .data(pool.clone())
+                .send()
+                .await;
+
+            // Check status
+            response.assert_status_is_ok();
+
+            // Check Values
+            let test_json = response.json().await;
+            let json_value = test_json.value();
+
+            json_value.object().get("domains").array().assert_len(1);
+            json_value.object().get("page").assert_i64(0);
+            json_value.object().get("more").assert_bool(false);
+
+            json_value.object().get("domains").object_array()[0]
+                .get("name")
+                .assert_string("foobar_domain");
+        }
+
+        {
+            // Test Request
+            let response: TestResponse = cli
+                .get("/search/domain")
+                .header("Content-Type", "application/json; charset=utf-8")
+                .query("domain_name", &"foobar")
+                .query("owner", &"test.com")
+                .data(pool.clone())
+                .send()
+                .await;
+
+            // Check status
+            response.assert_status_is_ok();
+
+            // Check Values
+            let test_json = response.json().await;
+            let json_value = test_json.value();
+
+            json_value.object().get("domains").array().assert_len(1);
+            json_value.object().get("page").assert_i64(0);
+            json_value.object().get("more").assert_bool(false);
+
+            json_value.object().get("domains").object_array()[0]
+                .get("name")
+                .assert_string("foobar_domain");
+        }
+
+        {
+            // Test Request
+            let response: TestResponse = cli
+                .get("/search/domain")
+                .header("Content-Type", "application/json; charset=utf-8")
+                .query("domain_name", &"foobar")
+                .query("owner", &"test.com")
+                .query("extra", &"abc")
+                .data(pool.clone())
+                .send()
+                .await;
+
+            // Check status
+            response.assert_status_is_ok();
+
+            // Check Values
+            let test_json = response.json().await;
+            let json_value = test_json.value();
+
+            json_value.object().get("domains").array().assert_len(1);
+            json_value.object().get("page").assert_i64(0);
+            json_value.object().get("more").assert_bool(false);
+
+            json_value.object().get("domains").object_array()[0]
+                .get("name")
+                .assert_string("foobar_domain");
+        }
     }
 }
