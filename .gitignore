@@ -13,7 +13,6 @@ target/
 
 # Node
 node_modules/
-package-lock.json
 
 # Build generate code
 assets/scripts/
