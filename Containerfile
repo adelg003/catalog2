@@ -10,13 +10,14 @@ COPY ./build.rs ./build.rs
 COPY ./Cargo.* .
 COPY ./migrations ./migrations
 COPY ./package.json ./package.json
+COPY ./package-lock.json ./package-lock.json
 COPY ./password_hasher ./password_hasher
 COPY ./.sqlx ./.sqlx
 COPY ./src ./src
 COPY ./templates ./templates
 
 # Build Rust Application
-RUN SQLX_OFFLINE=true cargo install --path .
+RUN SQLX_OFFLINE=true cargo install --path . --locked
 
 # Copy compiled binary to runtime image
 FROM debian:latest

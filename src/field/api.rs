@@ -109,7 +109,10 @@ mod tests {
         gen_test_model_json, gen_test_user_creds, post_test_domain, post_test_field,
         post_test_model,
     };
-    use poem::{http::StatusCode, test::TestClient};
+    use poem::{
+        http::StatusCode,
+        test::{TestClient, TestResponse},
+    };
     use poem_openapi::OpenApiService;
     use sqlx::PgPool;
 
@@ -136,7 +139,7 @@ mod tests {
         let cli = TestClient::new(ep);
 
         // Test Request
-        let response = cli
+        let response: TestResponse = cli
             .post("/field")
             .header("X-API-Key", &token)
             .header("Content-Type", "application/json; charset=utf-8")
@@ -207,7 +210,7 @@ mod tests {
         let cli = TestClient::new(ep);
 
         // Test Request
-        let response = cli
+        let response: TestResponse = cli
             .post("/field")
             .header("X-API-Key", &token)
             .header("Content-Type", "application/json; charset=utf-8")
@@ -250,7 +253,7 @@ mod tests {
         let cli = TestClient::new(ep);
 
         // Test Request
-        let response = cli
+        let response: TestResponse = cli
             .post("/field")
             .header("X-API-Key", &token)
             .header("Content-Type", "application/json; charset=utf-8")
@@ -290,7 +293,7 @@ mod tests {
         let cli = TestClient::new(ep);
 
         // Test Request
-        let response = cli
+        let response: TestResponse = cli
             .get("/field/test_model/test_field")
             .header("Content-Type", "application/json; charset=utf-8")
             .data(pool)
@@ -350,7 +353,7 @@ mod tests {
         let cli = TestClient::new(ep);
 
         // Test Request
-        let response = cli
+        let response: TestResponse = cli
             .get("/field/test_model/test_field")
             .header("Content-Type", "application/json; charset=utf-8")
             .data(pool)
@@ -391,7 +394,7 @@ mod tests {
         let cli = TestClient::new(ep);
 
         // Test Request
-        let response = cli
+        let response: TestResponse = cli
             .put("/field/test_model/test_field")
             .header("X-API-Key", &token)
             .header("Content-Type", "application/json; charset=utf-8")
@@ -465,7 +468,7 @@ mod tests {
         let cli = TestClient::new(ep);
 
         // Test Request
-        let response = cli
+        let response: TestResponse = cli
             .put("/field/test_model/test_field")
             .header("X-API-Key", &token)
             .header("Content-Type", "application/json; charset=utf-8")
@@ -509,7 +512,7 @@ mod tests {
         let cli = TestClient::new(ep);
 
         // Test Request
-        let response = cli
+        let response: TestResponse = cli
             .put("/field/test_model/test_field")
             .header("X-API-Key", &token)
             .header("Content-Type", "application/json; charset=utf-8")
@@ -553,7 +556,7 @@ mod tests {
         let cli = TestClient::new(ep);
 
         // Test Request
-        let response = cli
+        let response: TestResponse = cli
             .delete("/field/test_model/test_field")
             .header("X-API-Key", &token)
             .header("Content-Type", "application/json; charset=utf-8")
@@ -620,7 +623,7 @@ mod tests {
         let cli = TestClient::new(ep);
 
         // Test Request
-        let response = cli
+        let response: TestResponse = cli
             .delete("/field/test_model/test_field")
             .header("X-API-Key", &token)
             .header("Content-Type", "application/json; charset=utf-8")

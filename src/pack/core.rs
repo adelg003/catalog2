@@ -1,7 +1,7 @@
 use crate::{
     dependency::{dependencies_select, Dependency, DependencyType},
-    pack::db::{pack_drop, pack_insert, pack_select, pack_update},
-    util::dbx_validater,
+    pack::db::{pack_drop, pack_insert, pack_select, pack_update, search_pack_select},
+    util::{dbx_validater, PAGE_SIZE},
 };
 use chrono::{DateTime, Utc};
 use poem::{
@@ -95,6 +95,25 @@ pub struct PackParam {
 pub struct PackChildren {
     pack: Pack,
     dependencies: Vec<Dependency>,
+}
+
+/// Pack Search Results
+#[derive(Object)]
+pub struct SearchPack {
+    packs: Vec<Pack>,
+    page: u64,
+    more: bool,
+}
+
+/// Params for searching for packs
+pub struct SearchPackParam {
+    pub pack_name: Option<String>,
+    pub domain_name: Option<String>,
+    pub runtime: Option<RuntimeType>,
+    pub compute: Option<ComputeType>,
+    pub repo: Option<String>,
+    pub owner: Option<String>,
+    pub extra: Option<String>,
 }
 
 /// Add a pack
@@ -191,6 +210,35 @@ pub async fn pack_read_with_children(
     Ok(PackChildren { pack, dependencies })
 }
 
+/// Read details of many packs
+pub async fn search_pack_read(
+    tx: &mut Transaction<'_, Postgres>,
+    search_param: &SearchPackParam,
+    page: &u64,
+) -> Result<SearchPack, poem::Error> {
+    // Compute offset
+    let offset = page * PAGE_SIZE;
+    let next_offset = (page + 1) * PAGE_SIZE;
+
+    // Pull the Pack
+    let packs = search_pack_select(tx, search_param, &Some(PAGE_SIZE), &Some(offset))
+        .await
+        .map_err(InternalServerError)?;
+
+    // More packs present?
+    let next_pack = search_pack_select(tx, search_param, &Some(PAGE_SIZE), &Some(next_offset))
+        .await
+        .map_err(InternalServerError)?;
+
+    let more = !next_pack.is_empty();
+
+    Ok(SearchPack {
+        packs,
+        page: *page,
+        more,
+    })
+}
+
 #[cfg(test)]
 mod tests {
 
@@ -268,6 +316,13 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_pack_remove_conflict() {
+        todo!();
+    }
+
+    /// Test pack search
+    #[test]
+    #[should_panic]
+    fn test_pack_read_search() {
         todo!();
     }
 }

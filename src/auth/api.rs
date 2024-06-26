@@ -32,7 +32,11 @@ impl AuthApi {
 mod tests {
     use super::*;
     use crate::util::test_utils::{gen_encode_decode_token, gen_test_user_creds};
-    use poem::{http::StatusCode, test::TestClient, web::headers::Authorization};
+    use poem::{
+        http::StatusCode,
+        test::{TestClient, TestResponse},
+        web::headers::Authorization,
+    };
     use poem_openapi::OpenApiService;
 
     /// Test creating a token
@@ -47,7 +51,7 @@ mod tests {
         let cli = TestClient::new(ep);
 
         // Test Request
-        let response = cli
+        let response: TestResponse = cli
             .post("/gen_token")
             .typed_header(Authorization::basic("test_user", "abc123"))
             .data(encoding_key)
@@ -71,7 +75,7 @@ mod tests {
         let cli = TestClient::new(ep);
 
         // Test Request
-        let response = cli
+        let response: TestResponse = cli
             .post("/gen_token")
             .typed_header(Authorization::basic("test_user", "bad_password"))
             .data(encoding_key)
@@ -98,7 +102,7 @@ mod tests {
         let cli = TestClient::new(ep);
 
         // Test Request
-        let response = cli
+        let response: TestResponse = cli
             .post("/gen_token")
             .header("X-API-Key", &token)
             .data(encoding_key)
@@ -123,7 +127,7 @@ mod tests {
         let cli = TestClient::new(ep);
 
         // Test Request
-        let response = cli
+        let response: TestResponse = cli
             .post("/gen_token")
             .header("X-API-Key", "bad_token")
             .data(encoding_key)

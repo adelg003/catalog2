@@ -2,12 +2,16 @@ use crate::{
     api::Tag,
     auth::{Auth, TokenAuth},
     pack::core::{
-        pack_add, pack_edit, pack_read, pack_read_with_children, pack_remove, Pack, PackChildren,
-        PackParam,
+        pack_add, pack_edit, pack_read, pack_read_with_children, pack_remove, search_pack_read,
+        ComputeType, Pack, PackChildren, PackParam, RuntimeType, SearchPack, SearchPackParam,
     },
 };
 use poem::{error::InternalServerError, web::Data};
-use poem_openapi::{param::Path, payload::Json, OpenApi};
+use poem_openapi::{
+    param::{Path, Query},
+    payload::Json,
+    OpenApi,
+};
 use sqlx::PgPool;
 
 /// Struct we will build our REST API / Webserver
@@ -113,6 +117,44 @@ impl PackApi {
 
         Ok(Json(pack_children))
     }
+
+    /// Search pack
+    #[oai(path = "/search/pack", method = "get", tag = Tag::Search)]
+    #[allow(clippy::too_many_arguments)]
+    async fn search_pack_get(
+        &self,
+        Data(pool): Data<&PgPool>,
+        Query(pack_name): Query<Option<String>>,
+        Query(domain_name): Query<Option<String>>,
+        Query(runtime): Query<Option<RuntimeType>>,
+        Query(compute): Query<Option<ComputeType>>,
+        Query(repo): Query<Option<String>>,
+        Query(owner): Query<Option<String>>,
+        Query(extra): Query<Option<String>>,
+        Query(page): Query<Option<u64>>,
+    ) -> Result<Json<SearchPack>, poem::Error> {
+        // Default no page to 0
+        let page = page.unwrap_or(0);
+
+        // Search Params
+        let search_param = SearchPackParam {
+            pack_name,
+            domain_name,
+            runtime,
+            compute,
+            repo,
+            owner,
+            extra,
+        };
+
+        // Start Transaction
+        let mut tx = pool.begin().await.map_err(InternalServerError)?;
+
+        // Pull packs
+        let search_pack = search_pack_read(&mut tx, &search_param, &page).await?;
+
+        Ok(Json(search_pack))
+    }
 }
 
 #[cfg(test)]
@@ -192,6 +234,13 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_pack_delete_conflict() {
+        todo!();
+    }
+
+    /// Test pack search
+    #[test]
+    #[should_panic]
+    fn test_search_pack_get() {
         todo!();
     }
 }

@@ -1,10 +1,10 @@
 use crate::{
     domain::domain_select,
     field::{DbxDataType, Field},
-    model::core::{Model, ModelParam},
+    model::core::{Model, ModelParam, SearchModelParam},
 };
 use chrono::Utc;
-use sqlx::{query, query_as, Postgres, Transaction};
+use sqlx::{query, query_as, Postgres, QueryBuilder, Transaction};
 
 /// Add a model to the model table
 pub async fn model_insert(
@@ -217,13 +217,87 @@ pub async fn field_drop_by_model(
     Ok(fields)
 }
 
+/// Pull multiple models that match the criteria
+pub async fn search_model_select(
+    tx: &mut Transaction<'_, Postgres>,
+    search_param: &SearchModelParam,
+    limit: &Option<u64>,
+    offset: &Option<u64>,
+) -> Result<Vec<Model>, sqlx::Error> {
+    // Query we will be modifying
+    let mut query = QueryBuilder::<'_, Postgres>::new(
+        "SELECT
+            model.id,
+            model.name,
+            model.domain_id,
+            domain.name AS \"domain_name\",
+            model.owner,
+            model.extra,
+            model.created_by,
+            model.created_date,
+            model.modified_by,
+            model.modified_date
+        FROM
+            model
+        LEFT JOIN
+            domain
+        ON
+            model.domain_id = domain.id",
+    );
+
+    // Should we add a WHERE statement?
+    if search_param.model_name.is_some()
+        || search_param.domain_name.is_some()
+        || search_param.owner.is_some()
+        || search_param.extra.is_some()
+    {
+        query.push(" WHERE ");
+
+        // Start building the WHERE statement with the "AND" separating the condition.
+        let mut separated = query.separated(" AND ");
+
+        // Fuzzy search
+        if let Some(model_name) = &search_param.model_name {
+            separated.push(format!("model.name ILIKE '%{model_name}%'"));
+        }
+        if let Some(domain_name) = &search_param.domain_name {
+            separated.push(format!("domain.name ILIKE '%{domain_name}%'"));
+        }
+        if let Some(owner) = &search_param.owner {
+            separated.push(format!("model.owner ILIKE '%{owner}%'"));
+        }
+        if let Some(extra) = &search_param.extra {
+            separated.push(format!("model.extra::text ILIKE '%{extra}%'"));
+        }
+    }
+
+    // Add ORDER BY
+    query.push(" ORDER BY model.id ");
+
+    // Add LIMIT
+    if let Some(limit) = limit {
+        query.push(format!(" LIMIT {limit} "));
+
+        // Add OFFSET
+        if let Some(offset) = offset {
+            query.push(format!(" OFFSET {offset} "));
+        }
+    }
+
+    // Run our generated SQL statement
+    let model = query.build_query_as::<Model>().fetch_all(&mut **tx).await?;
+
+    Ok(model)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::{
         model::util::test_utils::gen_test_model_param,
         util::test_utils::{
-            gen_test_domain_json, gen_test_field_json, post_test_domain, post_test_field,
+            gen_test_domain_json, gen_test_field_json, gen_test_model_json, post_test_domain,
+            post_test_field, post_test_model,
         },
     };
     use pretty_assertions::assert_eq;
@@ -686,5 +760,196 @@ mod tests {
 
             assert_eq!(fields.len(), 0);
         };
+    }
+
+    /// Test model search
+    #[sqlx::test]
+    async fn test_search_model(pool: PgPool) {
+        // Domain to create
+        let body = gen_test_domain_json("test_domain");
+        post_test_domain(&body, &pool).await;
+
+        // Domain to create
+        let body = gen_test_domain_json("foobar_domain");
+        post_test_domain(&body, &pool).await;
+
+        // Model to create
+        let body = gen_test_model_json("test_model", "test_domain");
+        post_test_model(&body, &pool).await;
+
+        let body = gen_test_model_json("test_model_2", "test_domain");
+        post_test_model(&body, &pool).await;
+
+        let body = gen_test_model_json("foobar_model", "foobar_domain");
+        post_test_model(&body, &pool).await;
+
+        {
+            let mut tx = pool.begin().await.unwrap();
+
+            let search_param = SearchModelParam {
+                model_name: None,
+                domain_name: None,
+                owner: None,
+                extra: None,
+            };
+
+            let models = search_model_select(&mut tx, &search_param, &None, &None)
+                .await
+                .unwrap();
+
+            assert_eq!(models.len(), 3);
+            assert_eq!(models[0].name, "test_model");
+            assert_eq!(models[1].name, "test_model_2");
+            assert_eq!(models[2].name, "foobar_model");
+        }
+
+        {
+            let mut tx = pool.begin().await.unwrap();
+
+            let search_param = SearchModelParam {
+                model_name: Some("abcdef".to_string()),
+                domain_name: None,
+                owner: None,
+                extra: None,
+            };
+
+            let models = search_model_select(&mut tx, &search_param, &None, &None)
+                .await
+                .unwrap();
+
+            assert_eq!(models.len(), 0);
+        }
+
+        {
+            let mut tx = pool.begin().await.unwrap();
+
+            let search_param = SearchModelParam {
+                model_name: Some("model".to_string()),
+                domain_name: None,
+                owner: None,
+                extra: None,
+            };
+
+            let models = search_model_select(&mut tx, &search_param, &None, &None)
+                .await
+                .unwrap();
+
+            assert_eq!(models.len(), 3);
+            assert_eq!(models[0].name, "test_model");
+            assert_eq!(models[1].name, "test_model_2");
+            assert_eq!(models[2].name, "foobar_model");
+        }
+
+        {
+            let mut tx = pool.begin().await.unwrap();
+
+            let search_param = SearchModelParam {
+                model_name: Some("model_2".to_string()),
+                domain_name: None,
+                owner: None,
+                extra: None,
+            };
+
+            let models = search_model_select(&mut tx, &search_param, &None, &None)
+                .await
+                .unwrap();
+
+            assert_eq!(models.len(), 1);
+            assert_eq!(models[0].name, "test_model_2");
+        }
+
+        {
+            let mut tx = pool.begin().await.unwrap();
+
+            let search_param = SearchModelParam {
+                model_name: None,
+                domain_name: Some("test".to_string()),
+                owner: None,
+                extra: None,
+            };
+
+            let models = search_model_select(&mut tx, &search_param, &None, &None)
+                .await
+                .unwrap();
+
+            assert_eq!(models.len(), 2);
+            assert_eq!(models[0].name, "test_model");
+            assert_eq!(models[1].name, "test_model_2");
+        }
+
+        {
+            let mut tx = pool.begin().await.unwrap();
+
+            let search_param = SearchModelParam {
+                model_name: None,
+                domain_name: None,
+                owner: Some("test_model%@test.com".to_string()),
+                extra: None,
+            };
+
+            let models = search_model_select(&mut tx, &search_param, &None, &None)
+                .await
+                .unwrap();
+
+            assert_eq!(models.len(), 2);
+            assert_eq!(models[0].name, "test_model");
+            assert_eq!(models[1].name, "test_model_2");
+        }
+
+        {
+            let mut tx = pool.begin().await.unwrap();
+
+            let search_param = SearchModelParam {
+                model_name: None,
+                domain_name: None,
+                owner: None,
+                extra: Some("abc".to_string()),
+            };
+
+            let models = search_model_select(&mut tx, &search_param, &None, &None)
+                .await
+                .unwrap();
+
+            assert_eq!(models.len(), 3);
+            assert_eq!(models[0].name, "test_model");
+            assert_eq!(models[1].name, "test_model_2");
+            assert_eq!(models[2].name, "foobar_model");
+        }
+
+        {
+            let mut tx = pool.begin().await.unwrap();
+
+            let search_param = SearchModelParam {
+                model_name: None,
+                domain_name: None,
+                owner: None,
+                extra: None,
+            };
+
+            let models = search_model_select(&mut tx, &search_param, &Some(1), &None)
+                .await
+                .unwrap();
+
+            assert_eq!(models.len(), 1);
+            assert_eq!(models[0].name, "test_model");
+        }
+
+        {
+            let mut tx = pool.begin().await.unwrap();
+
+            let search_param = SearchModelParam {
+                model_name: None,
+                domain_name: None,
+                owner: None,
+                extra: None,
+            };
+
+            let models = search_model_select(&mut tx, &search_param, &Some(1), &Some(1))
+                .await
+                .unwrap();
+
+            assert_eq!(models.len(), 1);
+            assert_eq!(models[0].name, "test_model_2");
+        }
     }
 }

@@ -1,11 +1,11 @@
 use crate::{
     domain::db::{
         domain_drop, domain_insert, domain_select, domain_update, model_select_by_domain,
-        pack_select_by_domain,
+        pack_select_by_domain, search_domain_select,
     },
     model::Model,
     pack::Pack,
-    util::dbx_validater,
+    util::{dbx_validater, PAGE_SIZE},
 };
 use chrono::{DateTime, Utc};
 use poem::{
@@ -46,6 +46,21 @@ pub struct DomainChildren {
     domain: Domain,
     models: Vec<Model>,
     packs: Vec<Pack>,
+}
+
+/// Domain Search Results
+#[derive(Object)]
+pub struct SearchDomain {
+    domains: Vec<Domain>,
+    page: u64,
+    more: bool,
+}
+
+/// Params for searching for domains
+pub struct SearchDomainParam {
+    pub domain_name: Option<String>,
+    pub owner: Option<String>,
+    pub extra: Option<String>,
 }
 
 /// Add a domain
@@ -142,6 +157,35 @@ pub async fn domain_read_with_children(
     })
 }
 
+/// Read details of many domains
+pub async fn search_domain_read(
+    tx: &mut Transaction<'_, Postgres>,
+    search_param: &SearchDomainParam,
+    page: &u64,
+) -> Result<SearchDomain, poem::Error> {
+    // Compute offset
+    let offset = page * PAGE_SIZE;
+    let next_offset = (page + 1) * PAGE_SIZE;
+
+    // Pull the Domains
+    let domains = search_domain_select(tx, search_param, &Some(PAGE_SIZE), &Some(offset))
+        .await
+        .map_err(InternalServerError)?;
+
+    // More domains present?
+    let next_domain = search_domain_select(tx, search_param, &Some(PAGE_SIZE), &Some(next_offset))
+        .await
+        .map_err(InternalServerError)?;
+
+    let more = !next_domain.is_empty();
+
+    Ok(SearchDomain {
+        domains,
+        page: *page,
+        more,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -149,7 +193,8 @@ mod tests {
         domain::util::test_utils::gen_test_domain_param,
         pack::{ComputeType, RuntimeType},
         util::test_utils::{
-            gen_test_model_json, gen_test_pack_json, post_test_model, post_test_pack,
+            gen_test_domain_json, gen_test_model_json, gen_test_pack_json, post_test_domain,
+            post_test_model, post_test_pack,
         },
     };
     use pretty_assertions::assert_eq;
@@ -554,5 +599,128 @@ mod tests {
     #[should_panic]
     fn test_domain_read_with_packs() {
         todo!();
+    }
+
+    /// Test domain search
+    #[sqlx::test]
+    async fn test_search_domain_read(pool: PgPool) {
+        {
+            for index in 0..50 {
+                let body = gen_test_domain_json(&format!("test_domain_{index}"));
+                post_test_domain(&body, &pool).await;
+            }
+
+            let body = gen_test_domain_json("foobar_domain");
+            post_test_domain(&body, &pool).await;
+        }
+
+        {
+            let mut tx = pool.begin().await.unwrap();
+
+            let search_param = SearchDomainParam {
+                domain_name: None,
+                owner: None,
+                extra: None,
+            };
+
+            let search = search_domain_read(&mut tx, &search_param, &0)
+                .await
+                .unwrap();
+
+            assert_eq!(search.domains.len(), 50);
+            assert_eq!(search.page, 0);
+            assert_eq!(search.more, true);
+        }
+
+        {
+            let mut tx = pool.begin().await.unwrap();
+
+            let search_param = SearchDomainParam {
+                domain_name: None,
+                owner: None,
+                extra: None,
+            };
+
+            let search = search_domain_read(&mut tx, &search_param, &1)
+                .await
+                .unwrap();
+
+            assert_eq!(search.domains.len(), 1);
+            assert_eq!(search.page, 1);
+            assert_eq!(search.more, false);
+        }
+
+        {
+            let mut tx = pool.begin().await.unwrap();
+
+            let search_param = SearchDomainParam {
+                domain_name: Some("abcdef".to_string()),
+                owner: None,
+                extra: None,
+            };
+
+            let search = search_domain_read(&mut tx, &search_param, &0)
+                .await
+                .unwrap();
+
+            assert_eq!(search.domains.len(), 0);
+            assert_eq!(search.page, 0);
+            assert_eq!(search.more, false);
+        }
+
+        {
+            let mut tx = pool.begin().await.unwrap();
+
+            let search_param = SearchDomainParam {
+                domain_name: Some("foobar".to_string()),
+                owner: None,
+                extra: None,
+            };
+
+            let search = search_domain_read(&mut tx, &search_param, &0)
+                .await
+                .unwrap();
+
+            assert_eq!(search.domains.len(), 1);
+            assert_eq!(search.domains[0].name, "foobar_domain");
+        }
+
+        {
+            let mut tx = pool.begin().await.unwrap();
+
+            let search_param = SearchDomainParam {
+                domain_name: Some("foobar".to_string()),
+                owner: Some("test.com".to_string()),
+                extra: None,
+            };
+
+            let search = search_domain_read(&mut tx, &search_param, &0)
+                .await
+                .unwrap();
+
+            assert_eq!(search.domains.len(), 1);
+            assert_eq!(search.domains[0].name, "foobar_domain");
+            assert_eq!(search.page, 0);
+            assert_eq!(search.more, false);
+        }
+
+        {
+            let mut tx = pool.begin().await.unwrap();
+
+            let search_param = SearchDomainParam {
+                domain_name: Some("foobar".to_string()),
+                owner: Some("test.com".to_string()),
+                extra: Some("abc".to_string()),
+            };
+
+            let search = search_domain_read(&mut tx, &search_param, &0)
+                .await
+                .unwrap();
+
+            assert_eq!(search.domains.len(), 1);
+            assert_eq!(search.domains[0].name, "foobar_domain");
+            assert_eq!(search.page, 0);
+            assert_eq!(search.more, false);
+        }
     }
 }
