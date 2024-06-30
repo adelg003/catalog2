@@ -12,6 +12,7 @@ use poem::{
     web::{Data, Form, Html, Query},
     Request,
 };
+use serde::Deserialize;
 use sqlx::PgPool;
 
 /// Tempate to add a Domain
@@ -94,22 +95,51 @@ pub async fn domain_form(
 #[template(path = "domain/component/domain_rows.html")]
 pub struct DomainRows {
     pub domains: Vec<Domain>,
+    pub params: SearchDomainParam,
+    pub next_page: Option<u64>,
+}
+
+/// Params for searching for domains
+#[derive(Deserialize)]
+struct SearchDomainUserParam {
+    domain_name: Option<String>,
+    owner: Option<String>,
+    extra: Option<String>,
+    ascending: Option<bool>,
+    page: Option<u64>,
 }
 
 /// Results of searching for a domain
 #[handler]
 pub async fn domain_rows(
     Data(pool): Data<&PgPool>,
-    Query(params): Query<SearchDomainParam>,
+    Query(params): Query<SearchDomainUserParam>,
 ) -> Result<Html<String>, poem::Error> {
+    // Search Params
+    let params = SearchDomainParam {
+        domain_name: params.domain_name,
+        owner: params.owner,
+        extra: params.extra,
+        ascending: params.ascending.unwrap_or(true),
+        page: params.page.unwrap_or(0),
+    };
+
     // Start transaction
     let mut tx = pool.begin().await.map_err(InternalServerError)?;
 
     // Default rows of the domain search
-    let domain_search: SearchDomain = search_domain_read(&mut tx, &params, &0).await?;
+    let domain_search: SearchDomain = search_domain_read(&mut tx, &params).await?;
+
+    // For pogination, here are the next page number
+    let next_page: Option<u64> = match &domain_search.more {
+        true => Some(params.page + 1),
+        false => None,
+    };
 
     let rows: String = DomainRows {
         domains: domain_search.domains,
+        params,
+        next_page,
     }
     .render()
     .map_err(InternalServerError)?;

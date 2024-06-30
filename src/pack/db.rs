@@ -173,9 +173,9 @@ pub async fn pack_drop(
 /// Pull multiple packs that match the criteria
 pub async fn search_pack_select(
     tx: &mut Transaction<'_, Postgres>,
-    search_param: &SearchPackParam,
-    limit: &Option<u64>,
-    offset: &Option<u64>,
+    params: &SearchPackParam,
+    limit: &u64,
+    offset: &u64,
 ) -> Result<Vec<Pack>, sqlx::Error> {
     // Query we will be modifying
     let mut query = QueryBuilder::<'_, Postgres>::new(
@@ -202,13 +202,13 @@ pub async fn search_pack_select(
     );
 
     // Should we add a WHERE statement?
-    if search_param.pack_name.is_some()
-        || search_param.domain_name.is_some()
-        || search_param.runtime.is_some()
-        || search_param.compute.is_some()
-        || search_param.repo.is_some()
-        || search_param.owner.is_some()
-        || search_param.extra.is_some()
+    if params.pack_name.is_some()
+        || params.domain_name.is_some()
+        || params.runtime.is_some()
+        || params.compute.is_some()
+        || params.repo.is_some()
+        || params.owner.is_some()
+        || params.extra.is_some()
     {
         query.push(" WHERE ");
 
@@ -216,41 +216,37 @@ pub async fn search_pack_select(
         let mut separated = query.separated(" AND ");
 
         // Fuzzy search
-        if let Some(pack_name) = &search_param.pack_name {
+        if let Some(pack_name) = &params.pack_name {
             separated.push(format!("pack.name ILIKE '%{pack_name}%'"));
         }
-        if let Some(domain_name) = &search_param.domain_name {
+        if let Some(domain_name) = &params.domain_name {
             separated.push(format!("domain.name ILIKE '%{domain_name}%'"));
         }
-        if let Some(runtime) = search_param.runtime {
+        if let Some(runtime) = params.runtime {
             separated.push(format!("pack.runtime = '{runtime}'"));
         }
-        if let Some(compute) = search_param.compute {
+        if let Some(compute) = params.compute {
             separated.push(format!("pack.compute = '{compute}'"));
         }
-        if let Some(repo) = &search_param.repo {
+        if let Some(repo) = &params.repo {
             separated.push(format!("pack.repo ILIKE '%{repo}%'"));
         }
-        if let Some(owner) = &search_param.owner {
+        if let Some(owner) = &params.owner {
             separated.push(format!("pack.owner ILIKE '%{owner}%'"));
         }
-        if let Some(extra) = &search_param.extra {
+        if let Some(extra) = &params.extra {
             separated.push(format!("pack.extra::text ILIKE '%{extra}%'"));
         }
     }
 
     // Add ORDER BY
-    query.push(" ORDER BY pack.id ");
+    match &params.ascending {
+        true => query.push(" ORDER BY id "),
+        false => query.push(" ORDER BY id DESC"),
+    };
 
-    // Add LIMIT
-    if let Some(limit) = limit {
-        query.push(format!(" LIMIT {limit} "));
-
-        // Add OFFSET
-        if let Some(offset) = offset {
-            query.push(format!(" OFFSET {offset} "));
-        }
-    }
+    // Add LIMIT and OFFSET
+    query.push(format!(" LIMIT {limit} OFFSET {offset} "));
 
     // Run our generated SQL statement
     let pack = query.build_query_as::<Pack>().fetch_all(&mut **tx).await?;

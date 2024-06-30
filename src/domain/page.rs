@@ -42,6 +42,10 @@ pub async fn domain_search(
     // Start transaction
     let mut tx = pool.begin().await.map_err(InternalServerError)?;
 
+    // Defaults
+    let page: u64 = 0;
+    let ascending: bool = true;
+
     // Default rows of the domain search
     let domain_search: SearchDomain = search_domain_read(
         &mut tx,
@@ -49,11 +53,17 @@ pub async fn domain_search(
             domain_name: None,
             owner: None,
             extra: None,
-            ascending: None,
+            ascending,
+            page,
         },
-        &0,
     )
     .await?;
+
+    // For pagination, here are the next page number
+    let next_page: Option<u64> = match &domain_search.more {
+        true => Some(page + 1),
+        false => None,
+    };
 
     // Render HTML
     let domain_search: String = DomainSearch {
@@ -64,6 +74,14 @@ pub async fn domain_search(
         },
         rows: DomainRows {
             domains: domain_search.domains,
+            params: SearchDomainParam {
+                domain_name: None,
+                owner: None,
+                extra: None,
+                ascending,
+                page,
+            },
+            next_page,
         },
     }
     .render()

@@ -52,17 +52,17 @@ pub struct DomainChildren {
 #[derive(Object)]
 pub struct SearchDomain {
     pub domains: Vec<Domain>,
-    page: u64,
-    more: bool,
+    pub page: u64,
+    pub more: bool,
 }
 
 /// Params for searching for domains
-#[derive(Deserialize)]
 pub struct SearchDomainParam {
     pub domain_name: Option<String>,
     pub owner: Option<String>,
     pub extra: Option<String>,
-    pub ascending: Option<bool>,
+    pub ascending: bool,
+    pub page: u64,
 }
 
 /// Add a domain
@@ -162,20 +162,19 @@ pub async fn domain_read_with_children(
 /// Read details of many domains
 pub async fn search_domain_read(
     tx: &mut Transaction<'_, Postgres>,
-    search_param: &SearchDomainParam,
-    page: &u64,
+    params: &SearchDomainParam,
 ) -> Result<SearchDomain, poem::Error> {
     // Compute offset
-    let offset = page * PAGE_SIZE;
-    let next_offset = (page + 1) * PAGE_SIZE;
+    let offset = params.page * PAGE_SIZE;
+    let next_offset = (params.page + 1) * PAGE_SIZE;
 
     // Pull the Domains
-    let domains = search_domain_select(tx, search_param, &Some(PAGE_SIZE), &Some(offset))
+    let domains = search_domain_select(tx, params, &PAGE_SIZE, &offset)
         .await
         .map_err(InternalServerError)?;
 
     // More domains present?
-    let next_domain = search_domain_select(tx, search_param, &Some(1), &Some(next_offset))
+    let next_domain = search_domain_select(tx, params, &1, &next_offset)
         .await
         .map_err(InternalServerError)?;
 
@@ -183,7 +182,7 @@ pub async fn search_domain_read(
 
     Ok(SearchDomain {
         domains,
-        page: *page,
+        page: params.page,
         more,
     })
 }
@@ -623,14 +622,13 @@ mod tests {
                 domain_name: None,
                 owner: None,
                 extra: None,
-                ascending: None,
+                ascending: true,
+                page: 0,
             };
 
-            let search = search_domain_read(&mut tx, &search_param, &0)
-                .await
-                .unwrap();
+            let search = search_domain_read(&mut tx, &search_param).await.unwrap();
 
-            assert_eq!(search.domains.len(), 50);
+            assert_eq!(search.domains.len(), PAGE_SIZE as usize);
             assert_eq!(search.page, 0);
             assert_eq!(search.more, true);
         }
@@ -642,12 +640,11 @@ mod tests {
                 domain_name: None,
                 owner: None,
                 extra: None,
-                ascending: None,
+                ascending: true,
+                page: 1,
             };
 
-            let search = search_domain_read(&mut tx, &search_param, &1)
-                .await
-                .unwrap();
+            let search = search_domain_read(&mut tx, &search_param).await.unwrap();
 
             assert_eq!(search.domains.len(), 1);
             assert_eq!(search.page, 1);
@@ -661,12 +658,11 @@ mod tests {
                 domain_name: Some("abcdef".to_string()),
                 owner: None,
                 extra: None,
-                ascending: None,
+                ascending: true,
+                page: 0,
             };
 
-            let search = search_domain_read(&mut tx, &search_param, &0)
-                .await
-                .unwrap();
+            let search = search_domain_read(&mut tx, &search_param).await.unwrap();
 
             assert_eq!(search.domains.len(), 0);
             assert_eq!(search.page, 0);
@@ -680,12 +676,11 @@ mod tests {
                 domain_name: Some("foobar".to_string()),
                 owner: None,
                 extra: None,
-                ascending: None,
+                ascending: true,
+                page: 0,
             };
 
-            let search = search_domain_read(&mut tx, &search_param, &0)
-                .await
-                .unwrap();
+            let search = search_domain_read(&mut tx, &search_param).await.unwrap();
 
             assert_eq!(search.domains.len(), 1);
             assert_eq!(search.domains[0].name, "foobar_domain");
@@ -698,12 +693,11 @@ mod tests {
                 domain_name: Some("foobar".to_string()),
                 owner: Some("test.com".to_string()),
                 extra: None,
-                ascending: None,
+                ascending: true,
+                page: 0,
             };
 
-            let search = search_domain_read(&mut tx, &search_param, &0)
-                .await
-                .unwrap();
+            let search = search_domain_read(&mut tx, &search_param).await.unwrap();
 
             assert_eq!(search.domains.len(), 1);
             assert_eq!(search.domains[0].name, "foobar_domain");
@@ -718,12 +712,11 @@ mod tests {
                 domain_name: Some("foobar".to_string()),
                 owner: Some("test.com".to_string()),
                 extra: Some("abc".to_string()),
-                ascending: None,
+                ascending: true,
+                page: 0,
             };
 
-            let search = search_domain_read(&mut tx, &search_param, &0)
-                .await
-                .unwrap();
+            let search = search_domain_read(&mut tx, &search_param).await.unwrap();
 
             assert_eq!(search.domains.len(), 1);
             assert_eq!(search.domains[0].name, "foobar_domain");
