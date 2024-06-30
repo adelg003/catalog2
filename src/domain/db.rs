@@ -266,7 +266,10 @@ pub async fn search_domain_select(
     }
 
     // Add ORDER BY
-    query.push(" ORDER BY id ");
+    match &search_param.ascending {
+        Some(true) | None => query.push(" ORDER BY id "),
+        Some(false) => query.push(" ORDER BY id DESC"),
+    };
 
     // Add LIMIT
     if let Some(limit) = limit {
@@ -648,6 +651,7 @@ mod tests {
                 domain_name: None,
                 owner: None,
                 extra: None,
+                ascending: None,
             };
 
             let domains = search_domain_select(&mut tx, &search_param, &None, &None)
@@ -664,6 +668,7 @@ mod tests {
                 domain_name: Some("abcdef".to_string()),
                 owner: None,
                 extra: None,
+                ascending: None,
             };
 
             let domains = search_domain_select(&mut tx, &search_param, &None, &None)
@@ -680,6 +685,7 @@ mod tests {
                 domain_name: Some("test".to_string()),
                 owner: None,
                 extra: None,
+                ascending: None,
             };
 
             let domains = search_domain_select(&mut tx, &search_param, &None, &None)
@@ -697,6 +703,7 @@ mod tests {
                 domain_name: Some("test".to_string()),
                 owner: Some("test.com".to_string()),
                 extra: None,
+                ascending: None,
             };
 
             let domains = search_domain_select(&mut tx, &search_param, &None, &None)
@@ -714,6 +721,7 @@ mod tests {
                 domain_name: Some("test".to_string()),
                 owner: Some("test.com".to_string()),
                 extra: Some("abc".to_string()),
+                ascending: None,
             };
 
             let domains = search_domain_select(&mut tx, &search_param, &None, &None)
@@ -731,6 +739,7 @@ mod tests {
                 domain_name: None,
                 owner: None,
                 extra: None,
+                ascending: None,
             };
 
             let domains = search_domain_select(&mut tx, &search_param, &Some(1), &None)
@@ -748,6 +757,7 @@ mod tests {
                 domain_name: None,
                 owner: None,
                 extra: None,
+                ascending: None,
             };
 
             let domains = search_domain_select(&mut tx, &search_param, &Some(1), &Some(1))

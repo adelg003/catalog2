@@ -1,14 +1,16 @@
 use crate::{
     auth::has_ui_access,
-    domain::core::{domain_add, Domain, DomainParam},
+    domain::core::{
+        domain_add, search_domain_read, Domain, DomainParam, SearchDomain, SearchDomainParam,
+    },
 };
 use askama::Template;
 use poem::{
     error::InternalServerError,
     handler,
     session::Session,
-    web::{Data, Form, Html},
-    IntoResponse, Request, Response,
+    web::{Data, Form, Html, Query},
+    Request,
 };
 use sqlx::PgPool;
 
@@ -27,7 +29,7 @@ pub async fn domain_form(
     Form(params): Form<DomainParam>,
     session: &Session,
     req: &Request,
-) -> Result<Response, poem::Error> {
+) -> Result<Html<String>, poem::Error> {
     // Pull username from cookies
     let username: Option<String> = session.get("username");
 
@@ -43,7 +45,7 @@ pub async fn domain_form(
             .render()
             .map_err(InternalServerError)?;
 
-            return Ok(Html(domain_form).into_response());
+            return Ok(Html(domain_form));
         }
     };
 
@@ -58,7 +60,7 @@ pub async fn domain_form(
         .render()
         .map_err(InternalServerError)?;
 
-        return Ok(Html(domain_form).into_response());
+        return Ok(Html(domain_form));
     }
 
     // Start transaction
@@ -84,7 +86,7 @@ pub async fn domain_form(
         .render()
         .map_err(InternalServerError)?;
 
-    Ok(Html(domain_form).into_response())
+    Ok(Html(domain_form))
 }
 
 /// Tempate for rows od Domains
@@ -92,4 +94,25 @@ pub async fn domain_form(
 #[template(path = "domain/component/domain_rows.html")]
 pub struct DomainRows {
     pub domains: Vec<Domain>,
+}
+
+/// Results of searching for a domain
+#[handler]
+pub async fn domain_rows(
+    Data(pool): Data<&PgPool>,
+    Query(params): Query<SearchDomainParam>,
+) -> Result<Html<String>, poem::Error> {
+    // Start transaction
+    let mut tx = pool.begin().await.map_err(InternalServerError)?;
+
+    // Default rows of the domain search
+    let domain_search: SearchDomain = search_domain_read(&mut tx, &params, &0).await?;
+
+    let rows: String = DomainRows {
+        domains: domain_search.domains,
+    }
+    .render()
+    .map_err(InternalServerError)?;
+
+    Ok(Html(rows))
 }

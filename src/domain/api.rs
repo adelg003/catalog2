@@ -127,6 +127,7 @@ impl DomainApi {
         Query(owner): Query<Option<String>>,
         Query(extra): Query<Option<String>>,
         Query(page): Query<Option<u64>>,
+        Query(ascending): Query<Option<bool>>,
     ) -> Result<Json<SearchDomain>, poem::Error> {
         // Default no page to 0
         let page = page.unwrap_or(0);
@@ -136,6 +137,7 @@ impl DomainApi {
             domain_name,
             owner,
             extra,
+            ascending,
         };
 
         // Start Transaction

@@ -57,10 +57,12 @@ pub struct SearchDomain {
 }
 
 /// Params for searching for domains
+#[derive(Deserialize)]
 pub struct SearchDomainParam {
     pub domain_name: Option<String>,
     pub owner: Option<String>,
     pub extra: Option<String>,
+    pub ascending: Option<bool>,
 }
 
 /// Add a domain
@@ -173,7 +175,7 @@ pub async fn search_domain_read(
         .map_err(InternalServerError)?;
 
     // More domains present?
-    let next_domain = search_domain_select(tx, search_param, &Some(PAGE_SIZE), &Some(next_offset))
+    let next_domain = search_domain_select(tx, search_param, &Some(1), &Some(next_offset))
         .await
         .map_err(InternalServerError)?;
 
@@ -621,6 +623,7 @@ mod tests {
                 domain_name: None,
                 owner: None,
                 extra: None,
+                ascending: None,
             };
 
             let search = search_domain_read(&mut tx, &search_param, &0)
@@ -639,6 +642,7 @@ mod tests {
                 domain_name: None,
                 owner: None,
                 extra: None,
+                ascending: None,
             };
 
             let search = search_domain_read(&mut tx, &search_param, &1)
@@ -657,6 +661,7 @@ mod tests {
                 domain_name: Some("abcdef".to_string()),
                 owner: None,
                 extra: None,
+                ascending: None,
             };
 
             let search = search_domain_read(&mut tx, &search_param, &0)
@@ -675,6 +680,7 @@ mod tests {
                 domain_name: Some("foobar".to_string()),
                 owner: None,
                 extra: None,
+                ascending: None,
             };
 
             let search = search_domain_read(&mut tx, &search_param, &0)
@@ -692,6 +698,7 @@ mod tests {
                 domain_name: Some("foobar".to_string()),
                 owner: Some("test.com".to_string()),
                 extra: None,
+                ascending: None,
             };
 
             let search = search_domain_read(&mut tx, &search_param, &0)
@@ -711,6 +718,7 @@ mod tests {
                 domain_name: Some("foobar".to_string()),
                 owner: Some("test.com".to_string()),
                 extra: Some("abc".to_string()),
+                ascending: None,
             };
 
             let search = search_domain_read(&mut tx, &search_param, &0)

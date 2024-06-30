@@ -12,7 +12,7 @@ use poem::{
     handler,
     session::Session,
     web::{Data, Html},
-    IntoResponse, Request, Response,
+    Request,
 };
 use sqlx::PgPool;
 
@@ -31,7 +31,7 @@ pub async fn domain_search(
     Data(pool): Data<&PgPool>,
     session: &Session,
     req: &Request,
-) -> Result<Response, poem::Error> {
+) -> Result<Html<String>, poem::Error> {
     // If we have the username from the cookies, do they have access?
     let username: Option<String> = session.get("username");
     let has_access: bool = match &username {
@@ -49,6 +49,7 @@ pub async fn domain_search(
             domain_name: None,
             owner: None,
             extra: None,
+            ascending: None,
         },
         &0,
     )
@@ -68,5 +69,5 @@ pub async fn domain_search(
     .render()
     .map_err(InternalServerError)?;
 
-    Ok(Html(domain_search).into_response())
+    Ok(Html(domain_search))
 }
