@@ -1,0 +1,109 @@
+<!-- prettier-ignore -->
+{% extends "shared/layout/base.html" %}
+
+{% block body %}
+
+<!-- Add the Navigation Bar -->
+{{ navbar|safe }}
+
+<!-- Add the header-->
+<header>
+  <h1>Domain Search</h1>
+</header>
+
+<main>
+  <!-- Add a Domain -->
+  {{ domain_add|safe }}
+
+  <!-- Domain Search -->
+  <fieldset>
+    <legend>Domain Filters</legend>
+
+    <!-- Ascending Toggle -->
+    <label>
+      Descending
+      <input
+        id="ascending"
+        name="ascending"
+        type="checkbox"
+        value="false"
+        hx-get="/domain/search/rows?page=0"
+        hx-trigger="click"
+        hx-target="#search_results"
+        hx-swap="innerHTML"
+        hx-include="#domain_name,#owner,#extra"
+      />
+    </label>
+
+    <br />
+
+    <!-- Name Search -->
+    <label>
+      Search Name
+      <input
+        id="domain_name"
+        name="domain_name"
+        type="search"
+        placeholder="Search for a Domain..."
+        hx-get="/domain/search/rows?page=0"
+        hx-trigger="keyup changed delay:250ms search"
+        hx-target="#search_results"
+        hx-swap="innerHTML"
+        hx-include="#ascending,#owner,#extra"
+      />
+    </label>
+
+    <br />
+
+    <!-- Owner Search -->
+    <label>
+      Search Owner
+      <input
+        id="owner"
+        name="owner"
+        type="search"
+        placeholder="Search for an Owner..."
+        hx-get="/domain/search/rows?page=0"
+        hx-trigger="keyup changed delay:250ms search"
+        hx-target="#search_results"
+        hx-swap="innerHTML"
+        hx-include="#ascending,#domain_name,#extra"
+      />
+    </label>
+
+    <br />
+
+    <!-- Extra Search -->
+    <label>
+      Search Extra
+      <input
+        id="extra"
+        name="extra"
+        type="search"
+        placeholder="Search for something extra..."
+        hx-get="/domain/search/rows?page=0"
+        hx-trigger="keyup changed delay:250ms search"
+        hx-target="#search_results"
+        hx-swap="innerHTML"
+        hx-include="#ascending,#domain_name,#owner"
+      />
+    </label>
+  </fieldset>
+
+  <!-- Domain Table -->
+  <table>
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Domain Name</th>
+        <th>Owner</th>
+        <th>Extra</th>
+      </tr>
+    </thead>
+    <tbody id="search_results">
+      {{ rows|safe }}
+    </tbody>
+  </table>
+</main>
+
+{% endblock %}

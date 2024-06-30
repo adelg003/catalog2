@@ -113,16 +113,37 @@ async fn token_checker(req: &Request, api_key: ApiKey) -> Option<User> {
     // Pull jwt data
     let token_data = decode::<Claim>(&api_key.key, decoding_key, &Validation::default()).ok()?;
 
-    // Make sure the user in the token is still valid.
-    let user_creds = req.data::<Vec<UserCred>>()?;
-    user_creds
-        .iter()
-        .find(|user_cred| user_cred.username == token_data.claims.sub)?;
+    // Params to valid the user
+    let allowed_users: &Vec<UserCred> = req.data::<Vec<UserCred>>()?;
+    let username: &str = &token_data.claims.sub;
 
-    // Return User from inside the token
+    // Make sure the user in the token is still valid.
+    validate_user(allowed_users, username)
+}
+
+/// Is the username still valid?
+fn validate_user(allowed_users: &[UserCred], username: &str) -> Option<User> {
+    // Make sure the user in the token is still valid.
+    let found_user: &UserCred = allowed_users
+        .iter()
+        .find(|allowed_user| allowed_user.username == username)?;
+
+    // Return found User
     Some(User {
-        username: token_data.claims.sub,
+        username: found_user.username.to_string(),
     })
+}
+
+/// Is the user allowed access?
+pub fn has_ui_access(username: &str, req: &Request) -> bool {
+    // Params to valid the user
+    let allowed_users: Option<&Vec<UserCred>> = req.data::<Vec<UserCred>>();
+
+    // Make sure the user in the token is still valid.
+    match allowed_users {
+        Some(allowed_users) => validate_user(allowed_users, username).is_some(),
+        None => false,
+    }
 }
 
 /// Key or Basic Auth

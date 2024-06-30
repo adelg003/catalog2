@@ -114,6 +114,8 @@ pub struct SearchPackParam {
     pub repo: Option<String>,
     pub owner: Option<String>,
     pub extra: Option<String>,
+    pub ascending: bool,
+    pub page: u64,
 }
 
 /// Add a pack
@@ -213,30 +215,27 @@ pub async fn pack_read_with_children(
 /// Read details of many packs
 pub async fn search_pack_read(
     tx: &mut Transaction<'_, Postgres>,
-    search_param: &SearchPackParam,
-    page: &u64,
+    params: &SearchPackParam,
 ) -> Result<SearchPack, poem::Error> {
+    let page: u64 = params.page;
+
     // Compute offset
     let offset = page * PAGE_SIZE;
     let next_offset = (page + 1) * PAGE_SIZE;
 
     // Pull the Pack
-    let packs = search_pack_select(tx, search_param, &Some(PAGE_SIZE), &Some(offset))
+    let packs = search_pack_select(tx, params, &PAGE_SIZE, &offset)
         .await
         .map_err(InternalServerError)?;
 
     // More packs present?
-    let next_pack = search_pack_select(tx, search_param, &Some(PAGE_SIZE), &Some(next_offset))
+    let next_pack = search_pack_select(tx, params, &PAGE_SIZE, &next_offset)
         .await
         .map_err(InternalServerError)?;
 
     let more = !next_pack.is_empty();
 
-    Ok(SearchPack {
-        packs,
-        page: *page,
-        more,
-    })
+    Ok(SearchPack { packs, page, more })
 }
 
 #[cfg(test)]

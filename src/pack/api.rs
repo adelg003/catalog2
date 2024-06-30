@@ -131,10 +131,12 @@ impl PackApi {
         Query(repo): Query<Option<String>>,
         Query(owner): Query<Option<String>>,
         Query(extra): Query<Option<String>>,
+        Query(ascending): Query<Option<bool>>,
         Query(page): Query<Option<u64>>,
     ) -> Result<Json<SearchPack>, poem::Error> {
-        // Default no page to 0
-        let page = page.unwrap_or(0);
+        // Defaults
+        let page: u64 = page.unwrap_or(0);
+        let ascending: bool = ascending.unwrap_or(true);
 
         // Search Params
         let search_param = SearchPackParam {
@@ -145,13 +147,15 @@ impl PackApi {
             repo,
             owner,
             extra,
+            ascending,
+            page,
         };
 
         // Start Transaction
         let mut tx = pool.begin().await.map_err(InternalServerError)?;
 
         // Pull packs
-        let search_pack = search_pack_read(&mut tx, &search_param, &page).await?;
+        let search_pack = search_pack_read(&mut tx, &search_param).await?;
 
         Ok(Json(search_pack))
     }
