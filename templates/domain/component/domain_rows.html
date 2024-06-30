@@ -1,0 +1,8 @@
+{% for domain in domains %}
+<tr id="row_{{ domain.id }}">
+  <td>{{ domain.id }}</td>
+  <td>{{ domain.name }}</td>
+  <td>{{ domain.owner }}</td>
+  <td>{{ domain.extra }}</td>
+</tr>
+{% endfor %}

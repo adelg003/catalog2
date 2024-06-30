@@ -14,6 +14,45 @@
 <main>
   <!-- Add a Domain -->
   {{ domain_add|safe }}
+
+  <!-- Domain Search -->
+  <fieldset>
+    <legend>Domain Filters</legend>
+
+    <!-- Ascending Toggle -->
+    <label>
+      Ascending
+      <input id="ascending" name="ascending" type="checkbox" value="true" />
+    </label>
+
+    <br />
+
+    <!-- Name Search -->
+    <label>
+      Search
+      <input
+        id="search"
+        name="search"
+        type="search"
+        placeholder="Search for a Domain..."
+      />
+    </label>
+  </fieldset>
+
+  <!-- Domain Table -->
+  <table>
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Domain Name</th>
+        <th>Owner</th>
+        <th>Extra</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{ rows|safe }}
+    </tbody>
+  </table>
 </main>
 
 {% endblock %}

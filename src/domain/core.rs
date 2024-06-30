@@ -51,7 +51,7 @@ pub struct DomainChildren {
 /// Domain Search Results
 #[derive(Object)]
 pub struct SearchDomain {
-    domains: Vec<Domain>,
+    pub domains: Vec<Domain>,
     page: u64,
     more: bool,
 }
