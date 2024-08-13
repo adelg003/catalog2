@@ -14,17 +14,17 @@ color-eyre = "0.6.3"
 dotenvy = "0.15.7"
 jsonwebtoken = "9.3.0"
 petgraph = { version = "0.6.5", features = ["serde-1"] }
-poem = { version = "3.0.1", features = ["embed", "eyre06", "session"] }
-poem-openapi = { version = "5.0.2", features = ["chrono", "swagger-ui"] }
-regex = "1.10.5"
-rust-embed = "8.4.0"
-serde = "1.0.203"
-serde_json = "1.0.118"
+poem = { version = "3.0.4", features = ["embed", "eyre06", "session"] }
+poem-openapi = { version = "5.0.3", features = ["chrono", "swagger-ui"] }
+regex = "1.10.6"
+rust-embed = "8.5.0"
+serde = "1.0.207"
+serde_json = "1.0.124"
 sqlx = { version = "0.7.4", features = ["chrono", "json", "postgres", "runtime-tokio"] }
-tokio = { version = "1.38.0", features = ["rt-multi-thread"] }
+tokio = { version = "1.39.2", features = ["rt-multi-thread"] }
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 validator = { version = "0.18.1", features = ["derive"] }
 
 [dev-dependencies]
-poem = { version = "3.0.1", features = ["test"] }
+poem = { version = "3.0.4", features = ["test"] }
 pretty_assertions = "1.4.0"
