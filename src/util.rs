@@ -38,6 +38,7 @@ pub mod test_utils {
         field::FieldApi,
         model::ModelApi,
         pack::PackApi,
+        schema::SchemaApi,
     };
     use jsonwebtoken::{DecodingKey, EncodingKey};
     use poem::{
@@ -170,11 +171,48 @@ pub mod test_utils {
         response.assert_status_is_ok();
     }
 
-    /// Create test field JSON
-    pub fn gen_test_field_json(name: &str, model_name: &str) -> serde_json::Value {
+    /// Create test schema JSON
+    pub fn gen_test_schema_json(name: &str) -> serde_json::Value {
         json!({
             "name": name,
-            "model_name": model_name,
+            "owner": format!("{name}@test.com"),
+            "extra": {
+                "abc": 123,
+                "def": [1, 2, 3],
+            },
+        })
+    }
+
+    /// Create a test schema
+    pub async fn post_test_schema(body: &serde_json::Value, pool: &PgPool) {
+        // Test JWT keys and User Creds
+        let user_creds = gen_test_user_creds("test_user");
+        let (token, _, decoding_key) = gen_jwt_encode_decode_token(&user_creds).await;
+
+        // Test Client
+        let ep = OpenApiService::new(SchemaApi, "test", "1.0");
+        let cli = TestClient::new(ep);
+
+        // Create Domain
+        let response: TestResponse = cli
+            .post("/schema")
+            .header("X-API-Key", &token)
+            .header("Content-Type", "application/json; charset=utf-8")
+            .body_json(body)
+            .data(decoding_key)
+            .data(user_creds)
+            .data(pool.clone())
+            .send()
+            .await;
+
+        response.assert_status_is_ok();
+    }
+
+    /// Create test field JSON
+    pub fn gen_test_field_json(name: &str, schema_name: &str) -> serde_json::Value {
+        json!({
+            "name": name,
+            "schema_name": schema_name,
             "is_primary": false,
             "data_type": "decimal",
             "is_nullable": true,

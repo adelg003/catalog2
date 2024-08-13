@@ -162,6 +162,8 @@ pub async fn model_select_by_domain(
             model.name,
             model.domain_id,
             domain.name AS \"domain_name\",
+            model.schema_id,
+            schema.name AS \"schema_name\",
             model.owner,
             model.extra,
             model.created_by,
@@ -174,6 +176,10 @@ pub async fn model_select_by_domain(
             domain
         ON
             model.domain_id = domain.id
+        LEFT JOIN
+            schema
+        ON
+            model.domain_id = schema.id
         WHERE
             domain.name = $1",
         domain_name,

@@ -12,20 +12,33 @@ CREATE TABLE domain (
   modified_date TIMESTAMPTZ NOT NULL
 );
 
+-- Schema Table
+CREATE TABLE schema (
+  id SERIAL PRIMARY KEY,
+  name TEXT NOT NULL UNIQUE,
+  owner TEXT NOT NULL,
+  extra JSONB,
+  created_by TEXT NOT NULL,
+  created_date TIMESTAMPTZ NOT NULL,
+  modified_by TEXT NOT NULL,
+  modified_date TIMESTAMPTZ NOT NULL
+);
+
 -- Model Table
 CREATE TABLE model (
   id SERIAL PRIMARY KEY,
   name TEXT NOT NULL UNIQUE,
   domain_id INTEGER NOT NULL,
+  schema_id INTEGER NOT NULL,
   owner TEXT NOT NULL,
   extra JSONB,
   created_by TEXT NOT NULL,
   created_date TIMESTAMPTZ NOT NULL,
   modified_by TEXT NOT NULL,
   modified_date TIMESTAMPTZ NOT NULL,
-  FOREIGN KEY(domain_id) REFERENCES domain(id)
+  FOREIGN KEY(domain_id) REFERENCES domain(id),
+  FOREIGN KEY(schema_id) REFERENCES schema(id)
 );
-
 
 -- Databricks Datatypes
 -- https://learn.microsoft.com/en-us/azure/databricks/sql/language-manual/sql-ref-datatypes
@@ -51,7 +64,7 @@ CREATE TYPE dbx_data_type AS ENUM (
 CREATE TABLE field (
   id SERIAL PRIMARY KEY,
   name TEXT NOT NULL,
-  model_id INTEGER NOT NULL,
+  schema_id INTEGER NOT NULL,
   is_primary BOOLEAN NOT NULL,
   data_type dbx_data_type NOT NULL,
   is_nullable BOOLEAN NOT NULL,
@@ -62,8 +75,8 @@ CREATE TABLE field (
   created_date TIMESTAMPTZ NOT NULL,
   modified_by TEXT NOT NULL,
   modified_date TIMESTAMPTZ NOT NULL,
-  UNIQUE (model_id, name),
-  FOREIGN KEY(model_id) REFERENCES model(id)
+  UNIQUE (schema_id, name),
+  FOREIGN KEY(schema_id) REFERENCES schema(id)
 );
 
 -- Where the pack runs?
@@ -127,4 +140,3 @@ CREATE TABLE pack_dependency (
   FOREIGN KEY(pack_id) REFERENCES pack(id),
   FOREIGN KEY(model_id) REFERENCES model(id)
 );
-

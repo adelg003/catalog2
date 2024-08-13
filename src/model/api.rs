@@ -2,9 +2,8 @@ use crate::{
     api::Tag,
     auth::{Auth, TokenAuth},
     model::core::{
-        model_add, model_add_with_fields, model_edit, model_read, model_read_with_children,
-        model_read_with_fields, model_remove, model_remove_with_fields, search_model_read, Model,
-        ModelChildren, ModelFields, ModelFieldsParam, ModelParam, SearchModel, SearchModelParam,
+        model_add, model_edit, model_read, model_read_with_children, model_remove,
+        search_model_read, Model, ModelChildren, ModelParam, SearchModel, SearchModelParam,
     },
 };
 use poem::{error::InternalServerError, web::Data};
@@ -103,65 +102,6 @@ impl ModelApi {
         Ok(Json(model))
     }
 
-    /// Add a model to the model table
-    #[oai(path = "/model_with_fields", method = "post", tag = Tag::ModelWithFields)]
-    async fn model_post_with_fields(
-        &self,
-        auth: TokenAuth,
-        Data(pool): Data<&PgPool>,
-        Json(param): Json<ModelFieldsParam>,
-    ) -> Result<Json<ModelFields>, poem::Error> {
-        // Get user from authentication.
-        let username = auth.username();
-
-        // Start Transaction
-        let mut tx = pool.begin().await.map_err(InternalServerError)?;
-
-        // Add a model and its field
-        let model_fields = model_add_with_fields(&mut tx, &param, username).await?;
-
-        // Commit Transaction
-        tx.commit().await.map_err(InternalServerError)?;
-
-        Ok(Json(model_fields))
-    }
-
-    /// Get a single model and its fields
-    #[oai(path = "/model_with_fields/:model_name", method = "get", tag = Tag::ModelWithFields)]
-    async fn model_get_with_fields(
-        &self,
-        Data(pool): Data<&PgPool>,
-        Path(model_name): Path<String>,
-    ) -> Result<Json<ModelFields>, poem::Error> {
-        // Start Transaction
-        let mut tx = pool.begin().await.map_err(InternalServerError)?;
-
-        // Pull domain
-        let model_fields = model_read_with_fields(&mut tx, &model_name).await?;
-
-        Ok(Json(model_fields))
-    }
-
-    /// Delete a model and it s fields
-    #[oai(path = "/model_with_fields/:model_name", method = "delete", tag = Tag::ModelWithFields)]
-    async fn model_delete_with_fields(
-        &self,
-        _auth: TokenAuth,
-        Data(pool): Data<&PgPool>,
-        Path(model_name): Path<String>,
-    ) -> Result<Json<ModelFields>, poem::Error> {
-        // Start Transaction
-        let mut tx = pool.begin().await.map_err(InternalServerError)?;
-
-        // Delete Model
-        let model_fields = model_remove_with_fields(&mut tx, &model_name).await?;
-
-        // Commit Transaction
-        tx.commit().await.map_err(InternalServerError)?;
-
-        Ok(Json(model_fields))
-    }
-
     /// Get a single model and its fields, and it dependencies
     #[oai(path = "/model_with_children/:model_name", method = "get", tag = Tag::ModelWithChildren)]
     async fn model_get_with_children(
@@ -180,11 +120,13 @@ impl ModelApi {
 
     /// Search models
     #[oai(path = "/search/model", method = "get", tag = Tag::Search)]
+    #[allow(clippy::too_many_arguments)]
     async fn search_model_get(
         &self,
         Data(pool): Data<&PgPool>,
         Query(model_name): Query<Option<String>>,
         Query(domain_name): Query<Option<String>>,
+        Query(schema_name): Query<Option<String>>,
         Query(owner): Query<Option<String>>,
         Query(extra): Query<Option<String>>,
         Query(page): Query<Option<u64>>,
@@ -196,6 +138,7 @@ impl ModelApi {
         let search_param = SearchModelParam {
             model_name,
             domain_name,
+            schema_name,
             owner,
             extra,
         };
