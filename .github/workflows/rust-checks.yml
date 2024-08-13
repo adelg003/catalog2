@@ -42,9 +42,8 @@ jobs:
           - 5432:5432
     steps:
       - uses: actions/checkout@v4
-      - uses: cargo-bins/cargo-binstall@main
       - name: Get SQLx-CLI
-        run: cargo binstall sqlx-cli --no-default-features --features native-tls,postgres
+        run: cargo install sqlx-cli --no-default-features --features native-tls,postgres
       - name: Migrate DB
         run: sqlx migrate run
       - name: Tests
@@ -63,9 +62,8 @@ jobs:
           - 5432:5432
     steps:
       - uses: actions/checkout@v4
-      - uses: cargo-bins/cargo-binstall@main
       - name: Get SQLx-CLI
-        run: cargo binstall sqlx-cli --no-default-features --features native-tls,postgres
+        run: cargo install sqlx-cli --no-default-features --features native-tls,postgres
       - name: Migrate DB
         run: sqlx migrate run
       - name: sqlx Cache Check
@@ -75,8 +73,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: cargo-bins/cargo-binstall@main
       - name: Get Cargo Deny
-        run: cargo binstall cargo-deny
+        run: cargo install cargo-deny
       - name: Cargo Deny Checks
         run: cargo deny check
