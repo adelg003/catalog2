@@ -134,10 +134,15 @@ pub mod test_utils {
     }
 
     /// Create test model JSON
-    pub fn gen_test_model_json(name: &str, domain_name: &str) -> serde_json::Value {
+    pub fn gen_test_model_json(
+        name: &str,
+        domain_name: &str,
+        schema_name: &str,
+    ) -> serde_json::Value {
         json!({
             "name": name,
             "domain_name": domain_name,
+            "schema_name": schema_name,
             "owner": format!("{name}@test.com"),
             "extra": {
                 "abc": 123,

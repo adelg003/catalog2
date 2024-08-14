@@ -217,7 +217,8 @@ pub async fn field_remove(
 mod tests {
     use super::*;
     use crate::util::test_utils::{
-        gen_test_domain_json, gen_test_schema_json, post_test_domain, post_test_schema,
+        gen_test_domain_json, gen_test_field_json, gen_test_schema_json, post_test_domain,
+        post_test_field, post_test_schema,
     };
     use pretty_assertions::assert_eq;
     use serde_json::json;
@@ -282,7 +283,7 @@ mod tests {
             let mut tx = pool.begin().await.unwrap();
 
             let field_param = gen_test_field_parm("test_field", "test_schema");
-            let field = field_add(&mut tx, &field_param, "test").await.unwrap();
+            let field = field_add(&mut tx, &field_param, "test_user").await.unwrap();
 
             tx.commit().await.unwrap();
 
@@ -306,8 +307,8 @@ mod tests {
                 "def": [1, 2, 3],
             }),
         );
-        assert_eq!(field.created_by, "test");
-        assert_eq!(field.modified_by, "test");
+        assert_eq!(field.created_by, "test_user");
+        assert_eq!(field.modified_by, "test_user");
     }
 
     /// Test field insert where no schema found
@@ -317,7 +318,7 @@ mod tests {
             let field_param = gen_test_field_parm("test_field", "test_schema");
 
             let mut tx = pool.begin().await.unwrap();
-            field_add(&mut tx, &field_param, "test").await.unwrap_err()
+            field_add(&mut tx, &field_param, "test_user").await.unwrap_err()
         };
 
         assert_eq!(err.status(), StatusCode::NOT_FOUND);
@@ -335,18 +336,14 @@ mod tests {
         let body = gen_test_schema_json("test_schema");
         post_test_schema(&body, &pool).await;
 
-        let field_param = gen_test_field_parm("test_field", "test_schema");
-        {
-            let mut tx = pool.begin().await.unwrap();
-
-            field_insert(&mut tx, &field_param, "test").await.unwrap();
-
-            tx.commit().await.unwrap();
-        }
+        // Field to create
+        let body = gen_test_field_json("test_field", "test_schema");
+        post_test_field(&body, &pool).await;
 
         let err = {
+            let field_param = gen_test_field_parm("test_field", "test_schema");
             let mut tx = pool.begin().await.unwrap();
-            field_add(&mut tx, &field_param, "test").await.unwrap_err()
+            field_add(&mut tx, &field_param, "test_user").await.unwrap_err()
         };
 
         assert_eq!(err.status(), StatusCode::CONFLICT);
@@ -367,14 +364,9 @@ mod tests {
         let body = gen_test_schema_json("test_schema");
         post_test_schema(&body, &pool).await;
 
-        {
-            let mut tx = pool.begin().await.unwrap();
-
-            let field_param = gen_test_field_parm("test_field", "test_schema");
-            field_insert(&mut tx, &field_param, "test").await.unwrap();
-
-            tx.commit().await.unwrap();
-        }
+        // Field to create
+        let body = gen_test_field_json("test_field", "test_schema");
+        post_test_field(&body, &pool).await;
 
         let field = {
             let mut tx = pool.begin().await.unwrap();
@@ -400,8 +392,8 @@ mod tests {
                 "def": [1, 2, 3],
             }),
         );
-        assert_eq!(field.created_by, "test");
-        assert_eq!(field.modified_by, "test");
+        assert_eq!(field.created_by, "test_user");
+        assert_eq!(field.modified_by, "test_user");
     }
 
     /// Test Reading a field that does not exists
@@ -440,14 +432,9 @@ mod tests {
         let body = gen_test_schema_json("foobar_schema");
         post_test_schema(&body, &pool).await;
 
-        {
-            let mut tx = pool.begin().await.unwrap();
-
-            let field_param = gen_test_field_parm("test_field", "test_schema");
-            field_insert(&mut tx, &field_param, "test").await.unwrap();
-
-            tx.commit().await.unwrap();
-        }
+        // Field to create
+        let body = gen_test_field_json("test_field", "test_schema");
+        post_test_field(&body, &pool).await;
 
         let field = {
             let field_param = gen_test_field_parm("foobar_field", "test_schema");
@@ -458,7 +445,7 @@ mod tests {
                 "test_schema",
                 "test_field",
                 &field_param.into_update(),
-                "foobar",
+                "foobar_user",
             )
             .await
             .unwrap()
@@ -481,8 +468,8 @@ mod tests {
                 "def": [1, 2, 3],
             }),
         );
-        assert_eq!(field.created_by, "test");
-        assert_eq!(field.modified_by, "foobar");
+        assert_eq!(field.created_by, "test_user");
+        assert_eq!(field.modified_by, "foobar_user");
     }
 
     /// Test field update where no field or schema found
@@ -497,7 +484,7 @@ mod tests {
                 "test_schema",
                 "test_field",
                 &field_param.into_update(),
-                "test",
+                "test_user",
             )
             .await
             .unwrap_err()
@@ -523,7 +510,7 @@ mod tests {
                 "test_schema",
                 "test_field",
                 &field_param.into_update(),
-                "foobar",
+                "foobar_user",
             )
             .await
             .unwrap_err()
@@ -544,17 +531,13 @@ mod tests {
         let body = gen_test_schema_json("test_schema");
         post_test_schema(&body, &pool).await;
 
-        {
-            let mut tx = pool.begin().await.unwrap();
+        // Field to create
+        let body = gen_test_field_json("test_field", "test_schema");
+        post_test_field(&body, &pool).await;
 
-            let field_param = gen_test_field_parm("test_field", "test_schema");
-            field_insert(&mut tx, &field_param, "test").await.unwrap();
-
-            let field_param = gen_test_field_parm("foobar_field", "test_schema");
-            field_insert(&mut tx, &field_param, "test").await.unwrap();
-
-            tx.commit().await.unwrap();
-        }
+        // Field to create
+        let body = gen_test_field_json("foobar_field", "test_schema");
+        post_test_field(&body, &pool).await;
 
         let err = {
             let mut tx = pool.begin().await.unwrap();
@@ -565,7 +548,7 @@ mod tests {
                 "test_schema",
                 "test_field",
                 &field_param.into_update(),
-                "foobar",
+                "foobar_user",
             )
             .await
             .unwrap_err()
@@ -589,14 +572,9 @@ mod tests {
         let body = gen_test_schema_json("test_schema");
         post_test_schema(&body, &pool).await;
 
-        {
-            let mut tx = pool.begin().await.unwrap();
-
-            let field_param = gen_test_field_parm("test_field", "test_schema");
-            field_insert(&mut tx, &field_param, "test").await.unwrap();
-
-            tx.commit().await.unwrap();
-        }
+        // Field to create
+        let body = gen_test_field_json("test_field", "test_schema");
+        post_test_field(&body, &pool).await;
 
         let field = {
             let mut tx = pool.begin().await.unwrap();
@@ -626,8 +604,8 @@ mod tests {
                 "def": [1, 2, 3],
             }),
         );
-        assert_eq!(field.created_by, "test");
-        assert_eq!(field.modified_by, "test");
+        assert_eq!(field.created_by, "test_user");
+        assert_eq!(field.modified_by, "test_user");
 
         let err = {
             let mut tx = pool.begin().await.unwrap();
