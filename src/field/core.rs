@@ -318,7 +318,9 @@ mod tests {
             let field_param = gen_test_field_parm("test_field", "test_schema");
 
             let mut tx = pool.begin().await.unwrap();
-            field_add(&mut tx, &field_param, "test_user").await.unwrap_err()
+            field_add(&mut tx, &field_param, "test_user")
+                .await
+                .unwrap_err()
         };
 
         assert_eq!(err.status(), StatusCode::NOT_FOUND);
@@ -343,7 +345,9 @@ mod tests {
         let err = {
             let field_param = gen_test_field_parm("test_field", "test_schema");
             let mut tx = pool.begin().await.unwrap();
-            field_add(&mut tx, &field_param, "test_user").await.unwrap_err()
+            field_add(&mut tx, &field_param, "test_user")
+                .await
+                .unwrap_err()
         };
 
         assert_eq!(err.status(), StatusCode::CONFLICT);
