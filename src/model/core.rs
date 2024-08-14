@@ -1,10 +1,7 @@
 use crate::{
     dependency::{dependencies_select, Dependency, DependencyType},
-    field::{field_add, DbxDataType, Field, FieldParam},
-    model::db::{
-        field_drop_by_model, field_select_by_model, model_drop, model_insert, model_select,
-        model_update, search_model_select,
-    },
+    model::db::{model_drop, model_insert, model_select, model_update, search_model_select},
+    schema::{schema_read_with_fields, SchemaFields},
     util::{dbx_validater, PAGE_SIZE},
 };
 use chrono::{DateTime, Utc};
@@ -24,6 +21,8 @@ pub struct Model {
     pub name: String,
     pub domain_id: i32,
     pub domain_name: String,
+    pub schema_id: i32,
+    pub schema_name: String,
     pub owner: String,
     pub extra: serde_json::Value,
     pub created_by: String,
@@ -38,42 +37,17 @@ pub struct ModelParam {
     #[validate(custom(function = dbx_validater))]
     pub name: String,
     pub domain_name: String,
+    pub schema_name: String,
     #[validate(email)]
     pub owner: String,
     pub extra: serde_json::Value,
 }
 
-/// Model with fields
-#[derive(Object)]
-pub struct ModelFields {
-    model: Model,
-    fields: Vec<Field>,
-}
-
-/// Model with field parameters
-#[derive(Object)]
-pub struct ModelFieldsParam {
-    model: ModelParam,
-    fields: Vec<FieldParamModelChild>,
-}
-
-/// How to create a new field if bundled with the models
-#[derive(Object)]
-pub struct FieldParamModelChild {
-    pub name: String,
-    pub is_primary: bool,
-    pub data_type: DbxDataType,
-    pub is_nullable: bool,
-    pub precision: Option<i32>,
-    pub scale: Option<i32>,
-    pub extra: serde_json::Value,
-}
-
-/// Model with fields and dependencies
+/// Model with schema, fields, and dependencies
 #[derive(Object)]
 pub struct ModelChildren {
     model: Model,
-    fields: Vec<Field>,
+    schema: SchemaFields,
     dependencies: Vec<Dependency>,
 }
 
@@ -89,6 +63,7 @@ pub struct SearchModel {
 pub struct SearchModelParam {
     pub model_name: Option<String>,
     pub domain_name: Option<String>,
+    pub schema_name: Option<String>,
     pub owner: Option<String>,
     pub extra: Option<String>,
 }
@@ -109,7 +84,7 @@ pub async fn model_add(
     match insert {
         Ok(model) => Ok(model),
         Err(sqlx::Error::RowNotFound) => Err(poem::Error::from_string(
-            "domain does not exist",
+            "domain or schema does not exist",
             StatusCode::NOT_FOUND,
         )),
         Err(sqlx::Error::Database(err)) => Err(Conflict(err)),
@@ -157,92 +132,10 @@ pub async fn model_remove(
     model_name: &str,
 ) -> Result<Model, poem::Error> {
     // Delete the model
-    let delete = model_drop(tx, model_name).await;
-
-    // What result did we get?
-    match delete {
-        Ok(model) => Ok(model),
-        Err(sqlx::Error::RowNotFound) => Err(poem::Error::from_string(
-            "model does not exist",
-            StatusCode::NOT_FOUND,
-        )),
-        Err(sqlx::Error::Database(err)) => Err(Conflict(err)),
-        Err(err) => Err(InternalServerError(err)),
-    }
+    model_drop(tx, model_name).await.map_err(NotFound)
 }
 
-/// Add a model with fields
-pub async fn model_add_with_fields(
-    tx: &mut Transaction<'_, Postgres>,
-    param: &ModelFieldsParam,
-    username: &str,
-) -> Result<ModelFields, poem::Error> {
-    // Make sure the payload we got is good (check with Validate package).
-    param.model.validate().map_err(BadRequest)?;
-
-    // Add Model
-    let model = model_add(tx, &param.model, username).await?;
-
-    // Add Fields
-    let mut fields = Vec::new();
-    for wip in &param.fields {
-        // Map to the full FieldParam
-        let field_param = FieldParam {
-            name: wip.name.clone(),
-            model_name: model.name.clone(),
-            is_primary: wip.is_primary,
-            data_type: wip.data_type,
-            is_nullable: wip.is_nullable,
-            precision: wip.precision,
-            scale: wip.scale,
-            extra: wip.extra.clone(),
-        };
-
-        // Make sure the payload we got is good (check with Validate package).
-        field_param.validate().map_err(BadRequest)?;
-
-        // Insert the field
-        let field = field_add(tx, &field_param, username).await?;
-
-        fields.push(field);
-    }
-
-    Ok(ModelFields { model, fields })
-}
-
-/// Read details of a model and add fields details for that model
-pub async fn model_read_with_fields(
-    tx: &mut Transaction<'_, Postgres>,
-    model_name: &str,
-) -> Result<ModelFields, poem::Error> {
-    // Pull model
-    let model = model_read(tx, model_name).await?;
-
-    // Pull models
-    let fields = field_select_by_model(tx, model_name)
-        .await
-        .map_err(InternalServerError)?;
-
-    Ok(ModelFields { model, fields })
-}
-
-/// Delete a model with all its fields
-pub async fn model_remove_with_fields(
-    tx: &mut Transaction<'_, Postgres>,
-    model_name: &str,
-) -> Result<ModelFields, poem::Error> {
-    // Delete all the fields
-    let fields = field_drop_by_model(tx, model_name)
-        .await
-        .map_err(InternalServerError)?;
-
-    // Delete the model
-    let model = model_remove(tx, model_name).await?;
-
-    Ok(ModelFields { model, fields })
-}
-
-/// Read details of a model, add fields details for that model, and add dependencies
+/// Read details of a model, add schema, field, and dependencies
 pub async fn model_read_with_children(
     tx: &mut Transaction<'_, Postgres>,
     model_name: &str,
@@ -250,10 +143,8 @@ pub async fn model_read_with_children(
     // Pull model
     let model = model_read(tx, model_name).await?;
 
-    // Pull models
-    let fields = field_select_by_model(tx, model_name)
-        .await
-        .map_err(InternalServerError)?;
+    // Pull Schema
+    let schema: SchemaFields = schema_read_with_fields(tx, &model.schema_name).await?;
 
     // Pull dependencies
     let dependencies = dependencies_select(tx, &DependencyType::Model, model_name)
@@ -262,7 +153,7 @@ pub async fn model_read_with_children(
 
     Ok(ModelChildren {
         model,
-        fields,
+        schema,
         dependencies,
     })
 }
@@ -300,15 +191,13 @@ pub async fn search_model_read(
 mod tests {
     use super::*;
     use crate::{
-        field::FieldApi,
         model::util::test_utils::gen_test_model_param,
         util::test_utils::{
-            gen_test_domain_json, gen_test_field_json, gen_test_model_json, post_test_domain,
-            post_test_field, post_test_model,
+            gen_test_domain_json, gen_test_model_json, gen_test_schema_json, post_test_domain,
+            post_test_model, post_test_schema,
         },
     };
-    use poem::{http::StatusCode, test::TestClient};
-    use poem_openapi::OpenApiService;
+    use poem::http::StatusCode;
     use pretty_assertions::assert_eq;
     use serde_json::json;
     use sqlx::PgPool;
@@ -320,11 +209,15 @@ mod tests {
         let body = gen_test_domain_json("test_domain");
         post_test_domain(&body, &pool).await;
 
+        // Schema to create
+        let body = gen_test_schema_json("test_schema");
+        post_test_schema(&body, &pool).await;
+
         let model = {
             let mut tx = pool.begin().await.unwrap();
 
-            let model_param = gen_test_model_param("test_model", "test_domain");
-            let model = model_add(&mut tx, &model_param, "test").await.unwrap();
+            let model_param = gen_test_model_param("test_model", "test_domain", "test_schema");
+            let model = model_add(&mut tx, &model_param, "test_user").await.unwrap();
 
             tx.commit().await.unwrap();
 
@@ -343,22 +236,24 @@ mod tests {
                 "def": [1, 2, 3],
             }),
         );
-        assert_eq!(model.created_by, "test");
-        assert_eq!(model.modified_by, "test");
+        assert_eq!(model.created_by, "test_user");
+        assert_eq!(model.modified_by, "test_user");
     }
 
     /// Test model insert where no domain found
     #[sqlx::test]
     async fn test_model_insert_not_found(pool: PgPool) {
         let err = {
-            let model_param = gen_test_model_param("test_model", "test_domain");
+            let model_param = gen_test_model_param("test_model", "test_domain", "test_schema");
 
             let mut tx = pool.begin().await.unwrap();
-            model_add(&mut tx, &model_param, "test").await.unwrap_err()
+            model_add(&mut tx, &model_param, "test_user")
+                .await
+                .unwrap_err()
         };
 
         assert_eq!(err.status(), StatusCode::NOT_FOUND);
-        assert_eq!(format!("{err}"), "domain does not exist");
+        assert_eq!(format!("{err}"), "domain or schema does not exist");
     }
 
     /// Test double model create conflict
@@ -368,18 +263,20 @@ mod tests {
         let body = gen_test_domain_json("test_domain");
         post_test_domain(&body, &pool).await;
 
-        let model_param = gen_test_model_param("test_model", "test_domain");
-        {
-            let mut tx = pool.begin().await.unwrap();
+        // Create a Schema
+        let body = gen_test_schema_json("test_schema");
+        post_test_schema(&body, &pool).await;
 
-            model_insert(&mut tx, &model_param, "test").await.unwrap();
-
-            tx.commit().await.unwrap();
-        }
+        // Create a Model
+        let body = gen_test_model_json("test_model", "test_domain", "test_schema");
+        post_test_model(&body, &pool).await;
 
         let err = {
+            let model_param = gen_test_model_param("test_model", "test_domain", "test_schema");
             let mut tx = pool.begin().await.unwrap();
-            model_add(&mut tx, &model_param, "test").await.unwrap_err()
+            model_add(&mut tx, &model_param, "test_user")
+                .await
+                .unwrap_err()
         };
 
         assert_eq!(err.status(), StatusCode::CONFLICT);
@@ -396,14 +293,13 @@ mod tests {
         let body = gen_test_domain_json("test_domain");
         post_test_domain(&body, &pool).await;
 
-        {
-            let model_param = gen_test_model_param("test_model", "test_domain");
+        // Create a Schema
+        let body = gen_test_schema_json("test_schema");
+        post_test_schema(&body, &pool).await;
 
-            let mut tx = pool.begin().await.unwrap();
-            model_insert(&mut tx, &model_param, "test").await.unwrap();
-
-            tx.commit().await.unwrap();
-        }
+        // Create a Model
+        let body = gen_test_model_json("test_model", "test_domain", "test_schema");
+        post_test_model(&body, &pool).await;
 
         let model = {
             let mut tx = pool.begin().await.unwrap();
@@ -422,8 +318,8 @@ mod tests {
                 "def": [1, 2, 3],
             }),
         );
-        assert_eq!(model.created_by, "test");
-        assert_eq!(model.modified_by, "test");
+        assert_eq!(model.created_by, "test_user");
+        assert_eq!(model.modified_by, "test_user");
     }
 
     /// Test Reading a model that does not exists
@@ -452,20 +348,19 @@ mod tests {
         let body = gen_test_domain_json("foobar_domain");
         post_test_domain(&body, &pool).await;
 
-        {
-            let mut tx = pool.begin().await.unwrap();
+        // Create a Schema
+        let body = gen_test_schema_json("test_schema");
+        post_test_schema(&body, &pool).await;
 
-            let model_param = gen_test_model_param("test_model", "test_domain");
-            model_insert(&mut tx, &model_param, "test").await.unwrap();
-
-            tx.commit().await.unwrap();
-        }
+        // Create a Model
+        let body = gen_test_model_json("test_model", "test_domain", "test_schema");
+        post_test_model(&body, &pool).await;
 
         let model = {
-            let model_param = gen_test_model_param("foobar_model", "foobar_domain");
+            let model_param = gen_test_model_param("foobar_model", "foobar_domain", "test_schema");
 
             let mut tx = pool.begin().await.unwrap();
-            model_edit(&mut tx, "test_model", &model_param, "foobar")
+            model_edit(&mut tx, "test_model", &model_param, "foobar_user")
                 .await
                 .unwrap()
         };
@@ -482,8 +377,8 @@ mod tests {
                 "def": [1, 2, 3],
             }),
         );
-        assert_eq!(model.created_by, "test");
-        assert_eq!(model.modified_by, "foobar");
+        assert_eq!(model.created_by, "test_user");
+        assert_eq!(model.modified_by, "foobar_user");
     }
 
     /// Test model update where no domain or model found
@@ -494,10 +389,10 @@ mod tests {
         post_test_domain(&body, &pool).await;
 
         let err = {
-            let model_param = gen_test_model_param("test_model", "test_domain");
+            let model_param = gen_test_model_param("test_model", "test_domain", "test_schema");
 
             let mut tx = pool.begin().await.unwrap();
-            model_edit(&mut tx, "test_model", &model_param, "test")
+            model_edit(&mut tx, "test_model", &model_param, "test_user")
                 .await
                 .unwrap_err()
         };
@@ -505,20 +400,19 @@ mod tests {
         assert_eq!(err.status(), StatusCode::NOT_FOUND);
         assert_eq!(format!("{err}"), "domain or model does not exist");
 
-        {
-            let model_param = gen_test_model_param("test_model", "test_domain");
+        // Create a Schema
+        let body = gen_test_schema_json("test_schema");
+        post_test_schema(&body, &pool).await;
 
-            let mut tx = pool.begin().await.unwrap();
-            model_insert(&mut tx, &model_param, "test").await.unwrap();
-
-            tx.commit().await.unwrap();
-        }
+        // Create a Model
+        let body = gen_test_model_json("test_model", "test_domain", "test_schema");
+        post_test_model(&body, &pool).await;
 
         let err = {
-            let model_param = gen_test_model_param("test_model", "foobar_domain");
+            let model_param = gen_test_model_param("test_model", "foobar_domain", "test_schema");
 
             let mut tx = pool.begin().await.unwrap();
-            model_edit(&mut tx, "test_model", &model_param, "foobar")
+            model_edit(&mut tx, "test_model", &model_param, "foobar_user")
                 .await
                 .unwrap_err()
         };
@@ -534,23 +428,23 @@ mod tests {
         let body = gen_test_domain_json("test_domain");
         post_test_domain(&body, &pool).await;
 
-        {
-            let mut tx = pool.begin().await.unwrap();
+        // Create a Schema
+        let body = gen_test_schema_json("test_schema");
+        post_test_schema(&body, &pool).await;
 
-            let model_param = gen_test_model_param("test_model", "test_domain");
-            model_insert(&mut tx, &model_param, "test").await.unwrap();
+        // Create a Model
+        let body = gen_test_model_json("test_model", "test_domain", "test_schema");
+        post_test_model(&body, &pool).await;
 
-            let model_param = gen_test_model_param("foobar_model", "test_domain");
-            model_insert(&mut tx, &model_param, "foobar").await.unwrap();
-
-            tx.commit().await.unwrap();
-        }
+        // Create a Model
+        let body = gen_test_model_json("foobar_model", "test_domain", "test_schema");
+        post_test_model(&body, &pool).await;
 
         let err = {
-            let model_param = gen_test_model_param("foobar_model", "test_domain");
+            let model_param = gen_test_model_param("foobar_model", "test_domain", "test_schema");
 
             let mut tx = pool.begin().await.unwrap();
-            model_edit(&mut tx, "test_model", &model_param, "foobar")
+            model_edit(&mut tx, "test_model", &model_param, "foobar_user")
                 .await
                 .unwrap_err()
         };
@@ -569,14 +463,13 @@ mod tests {
         let body = gen_test_domain_json("test_domain");
         post_test_domain(&body, &pool).await;
 
-        {
-            let mut tx = pool.begin().await.unwrap();
+        // Create a Schema
+        let body = gen_test_schema_json("test_schema");
+        post_test_schema(&body, &pool).await;
 
-            let model_param = gen_test_model_param("test_model", "test_domain");
-            model_insert(&mut tx, &model_param, "test").await.unwrap();
-
-            tx.commit().await.unwrap();
-        }
+        // Create a Model
+        let body = gen_test_model_json("test_model", "test_domain", "test_schema");
+        post_test_model(&body, &pool).await;
 
         let model = {
             let mut tx = pool.begin().await.unwrap();
@@ -599,8 +492,8 @@ mod tests {
                 "def": [1, 2, 3],
             }),
         );
-        assert_eq!(model.created_by, "test");
-        assert_eq!(model.modified_by, "test");
+        assert_eq!(model.created_by, "test_user");
+        assert_eq!(model.modified_by, "test_user");
 
         let err = {
             let mut tx = pool.begin().await.unwrap();
@@ -622,335 +515,10 @@ mod tests {
         };
 
         assert_eq!(err.status(), StatusCode::NOT_FOUND);
-        assert_eq!(format!("{err}"), "model does not exist");
-    }
-
-    /// Test model drop if children not droppped
-    #[sqlx::test]
-    async fn test_model_remove_conflict(pool: PgPool) {
-        // Domain to create
-        let body = gen_test_domain_json("test_domain");
-        post_test_domain(&body, &pool).await;
-
-        {
-            let mut tx = pool.begin().await.unwrap();
-
-            let model_param = gen_test_model_param("test_model", "test_domain");
-            model_insert(&mut tx, &model_param, "test").await.unwrap();
-
-            tx.commit().await.unwrap();
-        }
-
-        let body = gen_test_field_json("test_field", "test_model");
-        post_test_field(&body, &pool).await;
-
-        let err = {
-            let mut tx = pool.begin().await.unwrap();
-            model_remove(&mut tx, "test_model").await.unwrap_err()
-        };
-
-        assert_eq!(err.status(), StatusCode::CONFLICT);
         assert_eq!(
             format!("{err}"),
-            "update or delete on table \"model\" violates foreign key constraint \"field_model_id_fkey\" on table \"field\"",
+            "no rows returned by a query that expected to return at least one row"
         );
-    }
-
-    /// Test adding a model with fields
-    #[sqlx::test]
-    async fn test_model_add_with_fields(pool: PgPool) {
-        // Domain to create
-        let body = gen_test_domain_json("test_domain");
-        post_test_domain(&body, &pool).await;
-
-        let model_fields = {
-            let mut tx = pool.begin().await.unwrap();
-
-            let model_field_params = ModelFieldsParam {
-                model: gen_test_model_param("test_model", "test_domain"),
-                fields: vec![
-                    FieldParamModelChild {
-                        name: "test_field1".to_string(),
-                        is_primary: false,
-                        data_type: DbxDataType::Decimal,
-                        is_nullable: true,
-                        precision: Some(8),
-                        scale: Some(2),
-                        extra: json!({
-                            "abc": 123,
-                            "def": [1, 2, 3],
-                        }),
-                    },
-                    FieldParamModelChild {
-                        name: "test_field2".to_string(),
-                        is_primary: false,
-                        data_type: DbxDataType::Decimal,
-                        is_nullable: true,
-                        precision: Some(8),
-                        scale: Some(2),
-                        extra: json!({
-                            "abc": 123,
-                            "def": [1, 2, 3],
-                        }),
-                    },
-                ],
-            };
-
-            let model_fields = model_add_with_fields(&mut tx, &model_field_params, "test")
-                .await
-                .unwrap();
-
-            tx.commit().await.unwrap();
-
-            model_fields
-        };
-
-        let model = model_fields.model;
-        let field1 = &model_fields.fields[0];
-        let field2 = &model_fields.fields[1];
-
-        assert_eq!(model.id, 1);
-        assert_eq!(model.name, "test_model");
-        assert_eq!(model.domain_id, 1);
-        assert_eq!(model.owner, "test_model@test.com");
-        assert_eq!(
-            model.extra,
-            json!({
-                "abc": 123,
-                "def": [1, 2, 3],
-            }),
-        );
-        assert_eq!(model.created_by, "test");
-        assert_eq!(model.modified_by, "test");
-
-        assert_eq!(field1.id, 1);
-        assert_eq!(field1.name, "test_field1");
-        assert_eq!(field1.model_id, 1);
-        assert_eq!(field1.model_name, "test_model");
-        assert_eq!(field1.seq, Some(1));
-        assert_eq!(field1.is_primary, false);
-        assert_eq!(field1.data_type, DbxDataType::Decimal);
-        assert_eq!(field1.is_nullable, true);
-        assert_eq!(field1.precision, Some(8));
-        assert_eq!(field1.scale, Some(2));
-        assert_eq!(
-            field1.extra,
-            json!({
-                "abc": 123,
-                "def": [1, 2, 3],
-            }),
-        );
-        assert_eq!(field1.created_by, "test");
-        assert_eq!(field1.modified_by, "test");
-
-        assert_eq!(field2.id, 2);
-        assert_eq!(field2.name, "test_field2");
-        assert_eq!(field2.model_id, 1);
-        assert_eq!(field2.model_name, "test_model");
-        assert_eq!(field2.seq, Some(2));
-        assert_eq!(field2.is_primary, false);
-        assert_eq!(field2.data_type, DbxDataType::Decimal);
-        assert_eq!(field2.is_nullable, true);
-        assert_eq!(field2.precision, Some(8));
-        assert_eq!(field2.scale, Some(2));
-        assert_eq!(
-            field2.extra,
-            json!({
-                "abc": 123,
-                "def": [1, 2, 3],
-            }),
-        );
-        assert_eq!(field2.created_by, "test");
-        assert_eq!(field2.modified_by, "test");
-
-        assert_eq!(model.id, 1);
-        assert_eq!(model.name, "test_model");
-        assert_eq!(model.domain_id, 1);
-        assert_eq!(model.domain_name, "test_domain");
-        assert_eq!(model.owner, "test_model@test.com");
-        assert_eq!(
-            model.extra,
-            json!({
-                "abc": 123,
-                "def": [1, 2, 3],
-            }),
-        );
-        assert_eq!(model.created_by, "test");
-        assert_eq!(model.modified_by, "test");
-    }
-
-    /// Test Reading models with fields
-    #[sqlx::test]
-    async fn test_model_read_with_fields(pool: PgPool) {
-        // Domain to create
-        let body = gen_test_domain_json("test_domain");
-        post_test_domain(&body, &pool).await;
-
-        // Model to create
-        {
-            let mut tx = pool.begin().await.unwrap();
-
-            let model_param = gen_test_model_param("test_model", "test_domain");
-            model_add(&mut tx, &model_param, "test_user").await.unwrap();
-
-            tx.commit().await.unwrap();
-        };
-
-        // Field to create
-        let body = gen_test_field_json("test_field1", "test_model");
-        post_test_field(&body, &pool).await;
-
-        // Field to create
-        let body = gen_test_field_json("test_field2", "test_model");
-        post_test_field(&body, &pool).await;
-
-        // Lets read a model with some fields
-        let model_with_fields = {
-            let mut tx = pool.begin().await.unwrap();
-            model_read_with_fields(&mut tx, "test_model").await.unwrap()
-        };
-
-        let model = model_with_fields.model;
-        let field1 = &model_with_fields.fields[0];
-        let field2 = &model_with_fields.fields[1];
-
-        assert_eq!(model.id, 1);
-        assert_eq!(model.name, "test_model");
-        assert_eq!(model.domain_id, 1);
-        assert_eq!(model.owner, "test_model@test.com");
-        assert_eq!(
-            model.extra,
-            json!({
-                "abc": 123,
-                "def": [1, 2, 3],
-            }),
-        );
-        assert_eq!(model.created_by, "test_user");
-        assert_eq!(model.modified_by, "test_user");
-
-        assert_eq!(field1.id, 1);
-        assert_eq!(field1.name, "test_field1");
-        assert_eq!(field1.model_id, 1);
-        assert_eq!(field1.model_name, "test_model");
-        assert_eq!(field1.seq, Some(1));
-        assert_eq!(field1.is_primary, false);
-        assert_eq!(field1.data_type, DbxDataType::Decimal);
-        assert_eq!(field1.is_nullable, true);
-        assert_eq!(field1.precision, Some(8));
-        assert_eq!(field1.scale, Some(2));
-        assert_eq!(
-            field1.extra,
-            json!({
-                "abc": 123,
-                "def": [1, 2, 3],
-            }),
-        );
-        assert_eq!(field1.created_by, "test_user");
-        assert_eq!(field1.modified_by, "test_user");
-
-        assert_eq!(field2.id, 2);
-        assert_eq!(field2.name, "test_field2");
-        assert_eq!(field2.model_id, 1);
-        assert_eq!(field2.model_name, "test_model");
-        assert_eq!(field2.seq, Some(2));
-        assert_eq!(field2.is_primary, false);
-        assert_eq!(field2.data_type, DbxDataType::Decimal);
-        assert_eq!(field2.is_nullable, true);
-        assert_eq!(field2.precision, Some(8));
-        assert_eq!(field2.scale, Some(2));
-        assert_eq!(
-            field2.extra,
-            json!({
-                "abc": 123,
-                "def": [1, 2, 3],
-            }),
-        );
-        assert_eq!(field2.created_by, "test_user");
-        assert_eq!(field2.modified_by, "test_user");
-    }
-
-    /// Test field drop by model
-    #[sqlx::test]
-    async fn test_model_remove_with_fields(pool: PgPool) {
-        // Domain to create
-        let body = gen_test_domain_json("test_domain");
-        post_test_domain(&body, &pool).await;
-
-        // Model to create
-        {
-            let mut tx = pool.begin().await.unwrap();
-
-            let model_param = gen_test_model_param("test_model", "test_domain");
-            model_add(&mut tx, &model_param, "test").await.unwrap();
-
-            tx.commit().await.unwrap();
-        };
-
-        // Field to create
-        let body = gen_test_field_json("test_field1", "test_model");
-        post_test_field(&body, &pool).await;
-
-        // Field to create
-        let body = gen_test_field_json("test_field2", "test_model");
-        post_test_field(&body, &pool).await;
-
-        // Remove Field by Model
-        let model_fields = {
-            let mut tx = pool.begin().await.unwrap();
-            let model_fields = model_remove_with_fields(&mut tx, "test_model")
-                .await
-                .unwrap();
-
-            tx.commit().await.unwrap();
-
-            model_fields
-        };
-
-        assert_eq!(model_fields.fields.len(), 2);
-
-        // Test Client
-        let ep = OpenApiService::new(FieldApi, "test", "1.0");
-        let cli = TestClient::new(ep);
-
-        // Test Request
-        let response = cli
-            .get("/field/test_model/test_field1")
-            .header("Content-Type", "application/json; charset=utf-8")
-            .data(pool.clone())
-            .send()
-            .await;
-
-        // Check status
-        response.assert_status(StatusCode::NOT_FOUND);
-        response
-            .assert_text("no rows returned by a query that expected to return at least one row")
-            .await;
-
-        // Test Request
-        let response = cli
-            .get("/field/test_model/test_field2")
-            .header("Content-Type", "application/json; charset=utf-8")
-            .data(pool.clone())
-            .send()
-            .await;
-
-        // Check status
-        response.assert_status(StatusCode::NOT_FOUND);
-        response
-            .assert_text("no rows returned by a query that expected to return at least one row")
-            .await;
-
-        // Test Request
-        {
-            let mut tx = pool.begin().await.unwrap();
-            let err = model_read(&mut tx, "test_model").await.unwrap_err();
-
-            assert_eq!(err.status(), StatusCode::NOT_FOUND);
-            assert_eq!(
-                format!("{err}"),
-                "no rows returned by a query that expected to return at least one row",
-            );
-        }
     }
 
     /// Test model search
@@ -964,15 +532,23 @@ mod tests {
         let body = gen_test_domain_json("foobar_domain");
         post_test_domain(&body, &pool).await;
 
+        // Create a Schema
+        let body = gen_test_schema_json("test_schema");
+        post_test_schema(&body, &pool).await;
+
         {
             for index in 0..50 {
                 // Model to create
-                let body = gen_test_model_json(&format!("test_model_{index}"), "test_domain");
+                let body = gen_test_model_json(
+                    &format!("test_model_{index}"),
+                    "test_domain",
+                    "test_schema",
+                );
                 post_test_model(&body, &pool).await;
             }
 
             // Model to create
-            let body = gen_test_model_json("foobar_model", "foobar_domain");
+            let body = gen_test_model_json("foobar_model", "foobar_domain", "test_schema");
             post_test_model(&body, &pool).await;
         }
 
@@ -982,6 +558,7 @@ mod tests {
             let search_param = SearchModelParam {
                 model_name: None,
                 domain_name: None,
+                schema_name: None,
                 owner: None,
                 extra: None,
             };
@@ -999,6 +576,7 @@ mod tests {
             let search_param = SearchModelParam {
                 model_name: None,
                 domain_name: None,
+                schema_name: None,
                 owner: None,
                 extra: None,
             };
@@ -1014,8 +592,9 @@ mod tests {
             let mut tx = pool.begin().await.unwrap();
 
             let search_param = SearchModelParam {
-                model_name: Some("test".to_string()),
+                model_name: Some("test_model".to_string()),
                 domain_name: None,
+                schema_name: None,
                 owner: None,
                 extra: None,
             };
@@ -1033,6 +612,7 @@ mod tests {
             let search_param = SearchModelParam {
                 model_name: Some("abcdef".to_string()),
                 domain_name: None,
+                schema_name: None,
                 owner: None,
                 extra: None,
             };
@@ -1048,8 +628,9 @@ mod tests {
             let mut tx = pool.begin().await.unwrap();
 
             let search_param = SearchModelParam {
-                model_name: Some("foobar".to_string()),
+                model_name: Some("foobar_model".to_string()),
                 domain_name: None,
+                schema_name: None,
                 owner: None,
                 extra: None,
             };
@@ -1064,8 +645,9 @@ mod tests {
             let mut tx = pool.begin().await.unwrap();
 
             let search_param = SearchModelParam {
-                model_name: None,
-                domain_name: Some("test".to_string()),
+                model_name: Some("test_model".to_string()),
+                domain_name: None,
+                schema_name: None,
                 owner: None,
                 extra: None,
             };
@@ -1081,8 +663,9 @@ mod tests {
             let mut tx = pool.begin().await.unwrap();
 
             let search_param = SearchModelParam {
-                model_name: Some("foobar".to_string()),
+                model_name: Some("foobar_model".to_string()),
                 domain_name: None,
+                schema_name: None,
                 owner: Some("test.com".to_string()),
                 extra: None,
             };
@@ -1099,8 +682,9 @@ mod tests {
             let mut tx = pool.begin().await.unwrap();
 
             let search_param = SearchModelParam {
-                model_name: Some("foobar".to_string()),
+                model_name: Some("foobar_model".to_string()),
                 domain_name: None,
+                schema_name: None,
                 owner: Some("test.com".to_string()),
                 extra: Some("abc".to_string()),
             };

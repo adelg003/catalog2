@@ -16,5 +16,8 @@ DROP TYPE IF EXISTS dbx_data_type;
 -- Drop Model table
 DROP TABLE IF EXISTS model;
 
+-- Drop Table table
+DROP TABLE IF EXISTS schema;
+
 -- Drop Domain table and types
 DROP TABLE IF EXISTS domain;

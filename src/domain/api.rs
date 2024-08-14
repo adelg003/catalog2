@@ -153,7 +153,8 @@ mod tests {
     use super::*;
     use crate::util::test_utils::{
         gen_jwt_encode_decode_token, gen_test_domain_json, gen_test_model_json, gen_test_pack_json,
-        gen_test_user_creds, post_test_domain, post_test_model, post_test_pack,
+        gen_test_schema_json, gen_test_user_creds, post_test_domain, post_test_model,
+        post_test_pack, post_test_schema,
     };
     use poem::{
         http::StatusCode,
@@ -562,8 +563,12 @@ mod tests {
         let body = gen_test_domain_json("test_domain");
         post_test_domain(&body, &pool).await;
 
+        // Schema to create
+        let body = gen_test_schema_json("test_schema");
+        post_test_schema(&body, &pool).await;
+
         // Model to create
-        let body = gen_test_model_json("test_model", "test_domain");
+        let body = gen_test_model_json("test_model", "test_domain", "test_schema");
         post_test_model(&body, &pool).await;
 
         // Test JWT keys and User Creds
@@ -599,12 +604,16 @@ mod tests {
         let body = gen_test_domain_json("test_domain");
         post_test_domain(&body, &pool).await;
 
+        // Schema to create
+        let body = gen_test_schema_json("test_schema");
+        post_test_schema(&body, &pool).await;
+
         // Model to create
-        let body = gen_test_model_json("test_model1", "test_domain");
+        let body = gen_test_model_json("test_model1", "test_domain", "test_schema");
         post_test_model(&body, &pool).await;
 
         // Model to create
-        let body = gen_test_model_json("test_model2", "test_domain");
+        let body = gen_test_model_json("test_model2", "test_domain", "test_schema");
         post_test_model(&body, &pool).await;
 
         // Pack to create

@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO model (\n            name,\n            domain_id,\n            schema_id,\n            owner,\n            extra,\n            created_by,\n            created_date,\n            modified_by,\n            modified_date\n        ) VALUES (\n            $1,\n            $2,\n            $3,\n            $4,\n            $5,\n            $6,\n            $7,\n            $8,\n            $9\n        )",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int4",
+        "Int4",
+        "Text",
+        "Jsonb",
+        "Text",
+        "Timestamptz",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b9cc44132b39ad3d0657e3b5826e7e074efbe2bcbe6ae3bb40e7942e16da60ae"
+}

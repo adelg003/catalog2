@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT\n            id,\n            name,\n            model_id,\n            model_name,\n            seq,\n            is_primary,\n            data_type AS \"data_type!: DbxDataType\",\n            is_nullable,\n            precision,\n            scale,\n            extra,\n            created_by,\n            created_date,\n            modified_by,\n            modified_date\n        FROM (\n            SELECT\n                field.id,\n                field.name,\n                field.model_id,\n                model.name AS \"model_name\",\n                ROW_NUMBER() OVER (ORDER BY field.id) as \"seq\",\n                field.is_primary,\n                field.data_type,\n                field.is_nullable,\n                field.precision,\n                field.scale,\n                field.extra,\n                field.created_by,\n                field.created_date,\n                field.modified_by,\n                field.modified_date\n            FROM\n                field\n            LEFT JOIN\n                model\n            ON\n                field.model_id = model.id \n            WHERE\n                model.name = $1\n        ) wip\n        WHERE\n            name = $2",
+  "query": "SELECT\n            field.id,\n            field.name,\n            field.schema_id,\n            schema.name AS \"schema_name\",\n            ROW_NUMBER() OVER (ORDER BY field.id) as \"seq\",\n            field.is_primary,\n            field.data_type AS \"data_type!: DbxDataType\",\n            field.is_nullable,\n            field.precision,\n            field.scale,\n            field.extra,\n            field.created_by,\n            field.created_date,\n            field.modified_by,\n            field.modified_date\n        FROM\n            field\n        LEFT JOIN\n            schema\n        ON\n            field.schema_id = schema.id\n        WHERE\n            schema.name = $1\n        ORDER BY\n            field.id",
   "describe": {
     "columns": [
       {
@@ -15,12 +15,12 @@
       },
       {
         "ordinal": 2,
-        "name": "model_id",
+        "name": "schema_id",
         "type_info": "Int4"
       },
       {
         "ordinal": 3,
-        "name": "model_name",
+        "name": "schema_name",
         "type_info": "Text"
       },
       {
@@ -104,7 +104,6 @@
     ],
     "parameters": {
       "Left": [
-        "Text",
         "Text"
       ]
     },
@@ -126,5 +125,5 @@
       false
     ]
   },
-  "hash": "c5a762e21a49e6fdd261fd9b70ab45d0d17b8c8e19e74c4750b19fed7e3a7eea"
+  "hash": "52f8b63a1d6cc2cc4e5752cfad0ff3c0a5fe4061459eb64518f18a21d54623b7"
 }
