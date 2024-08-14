@@ -201,11 +201,11 @@ pub async fn search_model_select(
     );
 
     // Should we add a WHERE statement?
-    if search_param.model_name.is_some()
-        || search_param.domain_name.is_some()
-        || search_param.schema_name.is_some()
-        || search_param.owner.is_some()
-        || search_param.extra.is_some()
+    if params.model_name.is_some()
+        || params.domain_name.is_some()
+        || params.schema_name.is_some()
+        || params.owner.is_some()
+        || params.extra.is_some()
     {
         query.push(" WHERE ");
 
@@ -219,10 +219,10 @@ pub async fn search_model_select(
         if let Some(domain_name) = &params.domain_name {
             separated.push(format!("domain.name ILIKE '%{domain_name}%'"));
         }
-        if let Some(schema_name) = &search_param.schema_name {
+        if let Some(schema_name) = &params.schema_name {
             separated.push(format!("schema.name ILIKE '%{schema_name}%'"));
         }
-        if let Some(owner) = &search_param.owner {
+        if let Some(owner) = &params.owner {
             separated.push(format!("model.owner ILIKE '%{owner}%'"));
         }
         if let Some(extra) = &params.extra {
@@ -250,9 +250,12 @@ mod tests {
     use super::*;
     use crate::{
         model::util::test_utils::gen_test_model_param,
-        util::test_utils::{
-            gen_test_domain_json, gen_test_model_json, gen_test_schema_json, post_test_domain,
-            post_test_model, post_test_schema,
+        util::{
+            test_utils::{
+                gen_test_domain_json, gen_test_model_json, gen_test_schema_json, post_test_domain,
+                post_test_model, post_test_schema,
+            },
+            PAGE_SIZE,
         },
     };
     use pretty_assertions::assert_eq;
