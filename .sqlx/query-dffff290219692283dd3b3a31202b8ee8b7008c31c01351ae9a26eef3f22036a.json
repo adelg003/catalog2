@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "UPDATE\n            field\n        SET \n            name = $1,\n            is_primary = $2,\n            data_type = $3,\n            is_nullable = $4,\n            precision = $5,\n            scale = $6,\n            extra = $7,\n            modified_by = $8,\n            modified_date = $9\n        WHERE\n            model_id = $10\n            AND name = $11",
+  "query": "UPDATE\n            field\n        SET \n            name = $1,\n            is_primary = $2,\n            data_type = $3,\n            is_nullable = $4,\n            precision = $5,\n            scale = $6,\n            extra = $7,\n            modified_by = $8,\n            modified_date = $9\n        WHERE\n            schema_id = $10\n            AND name = $11",
   "describe": {
     "columns": [],
     "parameters": {
@@ -43,5 +43,5 @@
     },
     "nullable": []
   },
-  "hash": "8d73359dd26523129a08d7f88f0e5b6bb9ad41bb4d29944e9ed08cd5eb003d40"
+  "hash": "dffff290219692283dd3b3a31202b8ee8b7008c31c01351ae9a26eef3f22036a"
 }

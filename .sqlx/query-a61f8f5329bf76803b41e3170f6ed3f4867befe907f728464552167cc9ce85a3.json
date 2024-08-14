@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT\n            model.id,\n            model.name,\n            model.domain_id,\n            domain.name AS \"domain_name\",\n            model.owner,\n            model.extra,\n            model.created_by,\n            model.created_date,\n            model.modified_by,\n            model.modified_date\n        FROM\n            model\n        LEFT JOIN\n            domain\n        ON\n            model.domain_id = domain.id \n        WHERE\n            model.name = $1",
+  "query": "SELECT\n            model.id,\n            model.name,\n            model.domain_id,\n            domain.name AS \"domain_name\",\n            model.schema_id,\n            schema.name AS \"schema_name\",\n            model.owner,\n            model.extra,\n            model.created_by,\n            model.created_date,\n            model.modified_by,\n            model.modified_date\n        FROM\n            model\n        LEFT JOIN\n            domain\n        ON\n            model.domain_id = domain.id\n        LEFT JOIN\n            schema\n        ON\n            model.schema_id = schema.id\n        WHERE\n            schema.name = $1\n        ORDER BY\n            model.id",
   "describe": {
     "columns": [
       {
@@ -25,31 +25,41 @@
       },
       {
         "ordinal": 4,
+        "name": "schema_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "schema_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
         "name": "owner",
         "type_info": "Text"
       },
       {
-        "ordinal": 5,
+        "ordinal": 7,
         "name": "extra",
         "type_info": "Jsonb"
       },
       {
-        "ordinal": 6,
+        "ordinal": 8,
         "name": "created_by",
         "type_info": "Text"
       },
       {
-        "ordinal": 7,
+        "ordinal": 9,
         "name": "created_date",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 8,
+        "ordinal": 10,
         "name": "modified_by",
         "type_info": "Text"
       },
       {
-        "ordinal": 9,
+        "ordinal": 11,
         "name": "modified_date",
         "type_info": "Timestamptz"
       }
@@ -65,6 +75,8 @@
       false,
       false,
       false,
+      false,
+      false,
       true,
       false,
       false,
@@ -72,5 +84,5 @@
       false
     ]
   },
-  "hash": "8d9a5108bd1c4986a2db7d63953bcc78dfddefe8875b3aa8abb7473285a8a60d"
+  "hash": "a61f8f5329bf76803b41e3170f6ed3f4867befe907f728464552167cc9ce85a3"
 }

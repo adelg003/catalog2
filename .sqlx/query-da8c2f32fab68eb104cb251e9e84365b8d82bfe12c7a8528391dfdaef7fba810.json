@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "INSERT INTO field (\n            name,\n            model_id,\n            is_primary,\n            data_type,\n            is_nullable,\n            precision,\n            scale,\n            extra,\n            created_by,\n            created_date,\n            modified_by,\n            modified_date\n        ) VALUES (\n            $1,\n            $2,\n            $3,\n            $4,\n            $5,\n            $6,\n            $7,\n            $8,\n            $9,\n            $10,\n            $11,\n            $12\n        )",
+  "query": "INSERT INTO field (\n            name,\n            schema_id,\n            is_primary,\n            data_type,\n            is_nullable,\n            precision,\n            scale,\n            extra,\n            created_by,\n            created_date,\n            modified_by,\n            modified_date\n        ) VALUES (\n            $1,\n            $2,\n            $3,\n            $4,\n            $5,\n            $6,\n            $7,\n            $8,\n            $9,\n            $10,\n            $11,\n            $12\n        )",
   "describe": {
     "columns": [],
     "parameters": {
@@ -44,5 +44,5 @@
     },
     "nullable": []
   },
-  "hash": "32bc648686533ad5c25fc6dfb18f6183e766d27505f895c699b69869a28088bd"
+  "hash": "da8c2f32fab68eb104cb251e9e84365b8d82bfe12c7a8528391dfdaef7fba810"
 }
