@@ -1,6 +1,6 @@
 use crate::{
     auth::AuthApi, dependency::DependencyApi, domain::DomainApi, field::FieldApi, graph::GraphApi,
-    model::ModelApi, pack::PackApi,
+    model::ModelApi, pack::PackApi, schema::SchemaApi,
 };
 use poem::Route;
 use poem_openapi::{OpenApiService, Tags};
@@ -17,8 +17,11 @@ pub enum Tag {
     Model,
     #[oai(rename = "Model with Children")]
     ModelWithChildren,
-    #[oai(rename = "Model with Fields")]
-    ModelWithFields,
+    Schema,
+    #[oai(rename = "Schema with Fields")]
+    SchemaWithFields,
+    #[oai(rename = "Schema with Models")]
+    SchemaWithModels,
     Search,
     Pack,
     #[oai(rename = "Pack with Children")]
@@ -36,6 +39,7 @@ pub fn route(api_url: &str) -> Route {
         GraphApi,
         ModelApi,
         PackApi,
+        SchemaApi,
     );
 
     // Setup API Endpoints

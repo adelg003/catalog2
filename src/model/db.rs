@@ -1,7 +1,7 @@
 use crate::{
     domain::domain_select,
-    field::{DbxDataType, Field},
     model::core::{Model, ModelParam, SearchModelParam},
+    schema::schema_select,
 };
 use chrono::Utc;
 use sqlx::{query, query_as, Postgres, QueryBuilder, Transaction};
@@ -13,11 +13,13 @@ pub async fn model_insert(
     username: &str,
 ) -> Result<Model, sqlx::Error> {
     let domain = domain_select(tx, &model_param.domain_name).await?;
+    let schema = schema_select(tx, &model_param.schema_name).await?;
 
     query!(
         "INSERT INTO model (
             name,
             domain_id,
+            schema_id,
             owner,
             extra,
             created_by,
@@ -32,10 +34,12 @@ pub async fn model_insert(
             $5,
             $6,
             $7,
-            $8
+            $8,
+            $9
         )",
         model_param.name,
         domain.id,
+        schema.id,
         model_param.owner,
         model_param.extra,
         username,
@@ -64,6 +68,8 @@ pub async fn model_select(
             model.name,
             model.domain_id,
             domain.name AS \"domain_name\",
+            model.schema_id,
+            schema.name AS \"schema_name\",
             model.owner,
             model.extra,
             model.created_by,
@@ -76,6 +82,10 @@ pub async fn model_select(
             domain
         ON
             model.domain_id = domain.id 
+        LEFT JOIN
+            schema
+        ON
+            model.schema_id = schema.id
         WHERE
             model.name = $1",
         model_name,
@@ -93,8 +103,9 @@ pub async fn model_update(
     model_param: &ModelParam,
     username: &str,
 ) -> Result<Model, sqlx::Error> {
-    // Make sure related domain exists
+    // Make sure related domain and schema exists
     let domain = domain_select(tx, &model_param.domain_name).await?;
+    let schema = schema_select(tx, &model_param.schema_name).await?;
 
     let rows_affected = query!(
         "UPDATE
@@ -102,14 +113,16 @@ pub async fn model_update(
         SET 
             name = $1,
             domain_id = $2,
-            owner = $3,
-            extra = $4,
-            modified_by = $5,
-            modified_date = $6
+            schema_id = $3,
+            owner = $4,
+            extra = $5,
+            modified_by = $6,
+            modified_date = $7
         WHERE
-            name = $7",
+            name = $8",
         model_param.name,
         domain.id,
+        schema.id,
         model_param.owner,
         model_param.extra,
         username,
@@ -153,70 +166,6 @@ pub async fn model_drop(
     Ok(model)
 }
 
-/// Pull many fields by model
-pub async fn field_select_by_model(
-    tx: &mut Transaction<'_, Postgres>,
-    model_name: &str,
-) -> Result<Vec<Field>, sqlx::Error> {
-    let fields = query_as!(
-        Field,
-        "SELECT
-            field.id,
-            field.name,
-            field.model_id,
-            model.name AS \"model_name\",
-            ROW_NUMBER() OVER (ORDER BY field.id) as \"seq\",
-            field.is_primary,
-            field.data_type AS \"data_type!: DbxDataType\",
-            field.is_nullable,
-            field.precision,
-            field.scale,
-            field.extra,
-            field.created_by,
-            field.created_date,
-            field.modified_by,
-            field.modified_date
-        FROM
-            field
-        LEFT JOIN
-            model
-        ON
-            field.model_id = model.id 
-        WHERE
-            model.name = $1
-        ORDER BY
-            field.id",
-        model_name,
-    )
-    .fetch_all(&mut **tx)
-    .await?;
-
-    Ok(fields)
-}
-
-/// Delete all field for a model
-pub async fn field_drop_by_model(
-    tx: &mut Transaction<'_, Postgres>,
-    model_name: &str,
-) -> Result<Vec<Field>, sqlx::Error> {
-    // Pull the rows and parent
-    let model = model_select(tx, model_name).await?;
-    let fields = field_select_by_model(tx, model_name).await?;
-
-    // Now run the delete since we have the rows in memory
-    query!(
-        "DELETE FROM
-            field
-        WHERE
-            model_id = $1",
-        model.id,
-    )
-    .execute(&mut **tx)
-    .await?;
-
-    Ok(fields)
-}
-
 /// Pull multiple models that match the criteria
 pub async fn search_model_select(
     tx: &mut Transaction<'_, Postgres>,
@@ -231,6 +180,8 @@ pub async fn search_model_select(
             model.name,
             model.domain_id,
             domain.name AS \"domain_name\",
+            model.schema_id,
+            schema.name AS \"schema_name\",
             model.owner,
             model.extra,
             model.created_by,
@@ -242,14 +193,19 @@ pub async fn search_model_select(
         LEFT JOIN
             domain
         ON
-            model.domain_id = domain.id",
+            model.domain_id = domain.id
+        LEFT JOIN
+            schema
+        ON
+            model.schema_id = schema.id",
     );
 
     // Should we add a WHERE statement?
-    if params.model_name.is_some()
-        || params.domain_name.is_some()
-        || params.owner.is_some()
-        || params.extra.is_some()
+    if search_param.model_name.is_some()
+        || search_param.domain_name.is_some()
+        || search_param.schema_name.is_some()
+        || search_param.owner.is_some()
+        || search_param.extra.is_some()
     {
         query.push(" WHERE ");
 
@@ -263,7 +219,10 @@ pub async fn search_model_select(
         if let Some(domain_name) = &params.domain_name {
             separated.push(format!("domain.name ILIKE '%{domain_name}%'"));
         }
-        if let Some(owner) = &params.owner {
+        if let Some(schema_name) = &search_param.schema_name {
+            separated.push(format!("schema.name ILIKE '%{schema_name}%'"));
+        }
+        if let Some(owner) = &search_param.owner {
             separated.push(format!("model.owner ILIKE '%{owner}%'"));
         }
         if let Some(extra) = &params.extra {
@@ -291,12 +250,9 @@ mod tests {
     use super::*;
     use crate::{
         model::util::test_utils::gen_test_model_param,
-        util::{
-            test_utils::{
-                gen_test_domain_json, gen_test_field_json, gen_test_model_json, post_test_domain,
-                post_test_field, post_test_model,
-            },
-            PAGE_SIZE,
+        util::test_utils::{
+            gen_test_domain_json, gen_test_model_json, gen_test_schema_json, post_test_domain,
+            post_test_model, post_test_schema,
         },
     };
     use pretty_assertions::assert_eq;
@@ -310,12 +266,18 @@ mod tests {
         let body = gen_test_domain_json("test_domain");
         post_test_domain(&body, &pool).await;
 
+        // Schema to create
+        let body = gen_test_schema_json("test_schema");
+        post_test_schema(&body, &pool).await;
+
         let model = {
-            let model_param = gen_test_model_param("test_model", "test_domain");
+            let model_param = gen_test_model_param("test_model", "test_domain", "test_schema");
 
             let mut tx = pool.begin().await.unwrap();
 
-            let model = model_insert(&mut tx, &model_param, "test").await.unwrap();
+            let model = model_insert(&mut tx, &model_param, "test_user")
+                .await
+                .unwrap();
 
             tx.commit().await.unwrap();
 
@@ -334,18 +296,18 @@ mod tests {
                 "def": [1, 2, 3],
             }),
         );
-        assert_eq!(model.created_by, "test");
-        assert_eq!(model.modified_by, "test");
+        assert_eq!(model.created_by, "test_user");
+        assert_eq!(model.modified_by, "test_user");
     }
 
     /// Test model insert where no domain found
     #[sqlx::test]
     async fn test_model_insert_not_found(pool: PgPool) {
         let err = {
-            let model_param = gen_test_model_param("test_model", "test_domain");
+            let model_param = gen_test_model_param("test_model", "test_domain", "test_schema");
 
             let mut tx = pool.begin().await.unwrap();
-            model_insert(&mut tx, &model_param, "test")
+            model_insert(&mut tx, &model_param, "test_user")
                 .await
                 .unwrap_err()
         };
@@ -363,18 +325,18 @@ mod tests {
         let body = gen_test_domain_json("test_domain");
         post_test_domain(&body, &pool).await;
 
-        let model_param = gen_test_model_param("test_model", "test_domain");
+        // Create a Schema
+        let body = gen_test_schema_json("test_schema");
+        post_test_schema(&body, &pool).await;
 
-        {
-            let mut tx = pool.begin().await.unwrap();
-            model_insert(&mut tx, &model_param, "test").await.unwrap();
-
-            tx.commit().await.unwrap();
-        }
+        // Create a Model
+        let body = gen_test_model_json("test_model", "test_domain", "test_schema");
+        post_test_model(&body, &pool).await;
 
         let err = {
+            let model_param = gen_test_model_param("test_model", "test_domain", "test_schema");
             let mut tx = pool.begin().await.unwrap();
-            model_insert(&mut tx, &model_param, "test")
+            model_insert(&mut tx, &model_param, "test_user")
                 .await
                 .unwrap_err()
         };
@@ -395,14 +357,13 @@ mod tests {
         let body = gen_test_domain_json("test_domain");
         post_test_domain(&body, &pool).await;
 
-        {
-            let mut tx = pool.begin().await.unwrap();
+        // Create a Schema
+        let body = gen_test_schema_json("test_schema");
+        post_test_schema(&body, &pool).await;
 
-            let model_param = gen_test_model_param("test_model", "test_domain");
-            model_insert(&mut tx, &model_param, "test").await.unwrap();
-
-            tx.commit().await.unwrap();
-        }
+        // Create a Model
+        let body = gen_test_model_json("test_model", "test_domain", "test_schema");
+        post_test_model(&body, &pool).await;
 
         let model = {
             let mut tx = pool.begin().await.unwrap();
@@ -421,8 +382,8 @@ mod tests {
                 "def": [1, 2, 3],
             }),
         );
-        assert_eq!(model.created_by, "test");
-        assert_eq!(model.modified_by, "test");
+        assert_eq!(model.created_by, "test_user");
+        assert_eq!(model.modified_by, "test_user");
     }
 
     /// Test Reading a model that does not exists
@@ -450,20 +411,19 @@ mod tests {
         let body = gen_test_domain_json("foobar_domain");
         post_test_domain(&body, &pool).await;
 
-        {
-            let mut tx = pool.begin().await.unwrap();
+        // Create a Schema
+        let body = gen_test_schema_json("test_schema");
+        post_test_schema(&body, &pool).await;
 
-            let model_param = gen_test_model_param("test_model", "test_domain");
-            model_insert(&mut tx, &model_param, "test").await.unwrap();
-
-            tx.commit().await.unwrap();
-        }
+        // Create a Model
+        let body = gen_test_model_json("test_model", "test_domain", "test_schema");
+        post_test_model(&body, &pool).await;
 
         let model = {
-            let model_param = gen_test_model_param("foobar_model", "foobar_domain");
+            let model_param = gen_test_model_param("foobar_model", "foobar_domain", "test_schema");
 
             let mut tx = pool.begin().await.unwrap();
-            model_update(&mut tx, "test_model", &model_param, "foobar")
+            model_update(&mut tx, "test_model", &model_param, "foobar_user")
                 .await
                 .unwrap()
         };
@@ -480,8 +440,8 @@ mod tests {
                 "def": [1, 2, 3],
             }),
         );
-        assert_eq!(model.created_by, "test");
-        assert_eq!(model.modified_by, "foobar");
+        assert_eq!(model.created_by, "test_user");
+        assert_eq!(model.modified_by, "foobar_user");
     }
 
     /// Test model update where no domain or model found
@@ -492,10 +452,10 @@ mod tests {
         post_test_domain(&body, &pool).await;
 
         let err = {
-            let model_param = gen_test_model_param("test_model", "test_domain");
+            let model_param = gen_test_model_param("test_model", "test_domain", "test_schema");
 
             let mut tx = pool.begin().await.unwrap();
-            model_update(&mut tx, "test_model", &model_param, "test")
+            model_update(&mut tx, "test_model", &model_param, "test_user")
                 .await
                 .unwrap_err()
         };
@@ -505,20 +465,19 @@ mod tests {
             err => panic!("Incorrect sqlx error type: {}", err),
         };
 
-        {
-            let model_param = gen_test_model_param("test_model", "test_domain");
+        // Create a Schema
+        let body = gen_test_schema_json("test_schema");
+        post_test_schema(&body, &pool).await;
 
-            let mut tx = pool.begin().await.unwrap();
-            model_insert(&mut tx, &model_param, "test").await.unwrap();
-
-            tx.commit().await.unwrap();
-        }
+        // Create a Model
+        let body = gen_test_model_json("test_model", "test_domain", "test_schema");
+        post_test_model(&body, &pool).await;
 
         let err = {
-            let model_param = gen_test_model_param("test_model", "foobar_domain");
+            let model_param = gen_test_model_param("test_model", "foobar_domain", "test_schema");
 
             let mut tx = pool.begin().await.unwrap();
-            model_update(&mut tx, "test_model", &model_param, "foobar")
+            model_update(&mut tx, "test_model", &model_param, "foobar_user")
                 .await
                 .unwrap_err()
         };
@@ -536,23 +495,23 @@ mod tests {
         let body = gen_test_domain_json("test_domain");
         post_test_domain(&body, &pool).await;
 
-        {
-            let mut tx = pool.begin().await.unwrap();
+        // Create a Schema
+        let body = gen_test_schema_json("test_schema");
+        post_test_schema(&body, &pool).await;
 
-            let model_param = gen_test_model_param("test_model", "test_domain");
-            model_insert(&mut tx, &model_param, "test").await.unwrap();
+        // Create a Model
+        let body = gen_test_model_json("test_model", "test_domain", "test_schema");
+        post_test_model(&body, &pool).await;
 
-            let model_param = gen_test_model_param("foobar_model", "test_domain");
-            model_insert(&mut tx, &model_param, "foobar").await.unwrap();
-
-            tx.commit().await.unwrap();
-        }
+        // Create a Model
+        let body = gen_test_model_json("foobar_model", "test_domain", "test_schema");
+        post_test_model(&body, &pool).await;
 
         let err = {
-            let model_param = gen_test_model_param("foobar_model", "test_domain");
+            let model_param = gen_test_model_param("foobar_model", "test_domain", "test_schema");
 
             let mut tx = pool.begin().await.unwrap();
-            model_update(&mut tx, "test_model", &model_param, "foobar")
+            model_update(&mut tx, "test_model", &model_param, "foobar_user")
                 .await
                 .unwrap_err()
         };
@@ -573,14 +532,13 @@ mod tests {
         let body = gen_test_domain_json("test_domain");
         post_test_domain(&body, &pool).await;
 
-        {
-            let mut tx = pool.begin().await.unwrap();
+        // Create a Schema
+        let body = gen_test_schema_json("test_schema");
+        post_test_schema(&body, &pool).await;
 
-            let model_param = gen_test_model_param("test_model", "test_domain");
-            model_insert(&mut tx, &model_param, "test").await.unwrap();
-
-            tx.commit().await.unwrap();
-        }
+        // Create a Model
+        let body = gen_test_model_json("test_model", "test_domain", "test_schema");
+        post_test_model(&body, &pool).await;
 
         let model = {
             let mut tx = pool.begin().await.unwrap();
@@ -603,8 +561,8 @@ mod tests {
                 "def": [1, 2, 3],
             }),
         );
-        assert_eq!(model.created_by, "test");
-        assert_eq!(model.modified_by, "test");
+        assert_eq!(model.created_by, "test_user");
+        assert_eq!(model.modified_by, "test_user");
 
         let err = {
             let mut tx = pool.begin().await.unwrap();
@@ -631,136 +589,6 @@ mod tests {
         };
     }
 
-    /// Test model drop if children not droppped
-    #[sqlx::test]
-    async fn test_model_drop_conflict(pool: PgPool) {
-        // Domain to create
-        let body = gen_test_domain_json("test_domain");
-        post_test_domain(&body, &pool).await;
-
-        // Model to create
-        {
-            let mut tx = pool.begin().await.unwrap();
-
-            let model_param = gen_test_model_param("test_model", "test_domain");
-            model_insert(&mut tx, &model_param, "test").await.unwrap();
-
-            tx.commit().await.unwrap();
-        }
-
-        let body = gen_test_field_json("test_field", "test_model");
-        post_test_field(&body, &pool).await;
-
-        let err = {
-            let mut tx = pool.begin().await.unwrap();
-            model_drop(&mut tx, "test_model").await.unwrap_err()
-        };
-
-        match err {
-            sqlx::Error::Database(err) => assert_eq!(
-                err.message().to_string(),
-                "update or delete on table \"model\" violates foreign key constraint \"field_model_id_fkey\" on table \"field\"",
-            ),
-            err => panic!("Incorrect sqlx error type: {}", err),
-        };
-    }
-
-    /// Test field select by model
-    #[sqlx::test]
-    async fn test_field_select_by_model(pool: PgPool) {
-        {
-            let mut tx = pool.begin().await.unwrap();
-            let fields = field_select_by_model(&mut tx, "test_model").await.unwrap();
-
-            assert_eq!(fields.len(), 0);
-        }
-
-        // Domain to create
-        let body = gen_test_domain_json("test_domain");
-        post_test_domain(&body, &pool).await;
-
-        // Model to create
-        {
-            let mut tx = pool.begin().await.unwrap();
-
-            let model_param = gen_test_model_param("test_model", "test_domain");
-            model_insert(&mut tx, &model_param, "test").await.unwrap();
-
-            tx.commit().await.unwrap();
-        }
-
-        // Select Model with Fields
-        {
-            let mut tx = pool.begin().await.unwrap();
-
-            let fields = field_select_by_model(&mut tx, "test_model").await.unwrap();
-
-            assert_eq!(fields.len(), 0);
-        }
-
-        // Field to create
-        let body = gen_test_field_json("test_field1", "test_model");
-        post_test_field(&body, &pool).await;
-
-        // Field to create
-        let body = gen_test_field_json("test_field2", "test_model");
-        post_test_field(&body, &pool).await;
-
-        // Select Model with Fields
-        {
-            let mut tx = pool.begin().await.unwrap();
-            let fields = field_select_by_model(&mut tx, "test_model").await.unwrap();
-
-            assert_eq!(fields.len(), 2);
-        }
-    }
-
-    /// Test field drop by model
-    #[sqlx::test]
-    async fn test_field_drop_by_model(pool: PgPool) {
-        // Domain to create
-        let body = gen_test_domain_json("test_domain");
-        post_test_domain(&body, &pool).await;
-
-        // Model to create
-        {
-            let mut tx = pool.begin().await.unwrap();
-
-            let model_param = gen_test_model_param("test_model", "test_domain");
-            model_insert(&mut tx, &model_param, "test").await.unwrap();
-
-            tx.commit().await.unwrap();
-        }
-
-        // Field to create
-        let body = gen_test_field_json("test_field1", "test_model");
-        post_test_field(&body, &pool).await;
-
-        // Field to create
-        let body = gen_test_field_json("test_field2", "test_model");
-        post_test_field(&body, &pool).await;
-
-        // Delete Model with Fields
-        {
-            let mut tx = pool.begin().await.unwrap();
-            let fields = field_drop_by_model(&mut tx, "test_model").await.unwrap();
-
-            tx.commit().await.unwrap();
-
-            assert_eq!(fields.len(), 2);
-        };
-
-        // Delete Model with Fields, but none left
-        {
-            let mut tx = pool.begin().await.unwrap();
-            let fields = field_select_by_model(&mut tx, "test_model").await.unwrap();
-
-            tx.commit().await.unwrap();
-
-            assert_eq!(fields.len(), 0);
-        };
-    }
-
     /// Test model search
     #[sqlx::test]
     async fn test_search_model(pool: PgPool) {
@@ -772,14 +600,18 @@ mod tests {
         let body = gen_test_domain_json("foobar_domain");
         post_test_domain(&body, &pool).await;
 
+        // Create a Schema
+        let body = gen_test_schema_json("test_schema");
+        post_test_schema(&body, &pool).await;
+
         // Model to create
-        let body = gen_test_model_json("test_model", "test_domain");
+        let body = gen_test_model_json("test_model", "test_domain", "test_schema");
         post_test_model(&body, &pool).await;
 
-        let body = gen_test_model_json("test_model_2", "test_domain");
+        let body = gen_test_model_json("test_model_2", "test_domain", "test_schema");
         post_test_model(&body, &pool).await;
 
-        let body = gen_test_model_json("foobar_model", "foobar_domain");
+        let body = gen_test_model_json("foobar_model", "foobar_domain", "test_schema");
         post_test_model(&body, &pool).await;
 
         {
@@ -788,6 +620,7 @@ mod tests {
             let search_param = SearchModelParam {
                 model_name: None,
                 domain_name: None,
+                schema_name: None,
                 owner: None,
                 extra: None,
                 ascending: true,
@@ -810,6 +643,7 @@ mod tests {
             let search_param = SearchModelParam {
                 model_name: Some("abcdef".to_string()),
                 domain_name: None,
+                schema_name: None,
                 owner: None,
                 extra: None,
                 ascending: true,
@@ -829,6 +663,7 @@ mod tests {
             let search_param = SearchModelParam {
                 model_name: Some("model".to_string()),
                 domain_name: None,
+                schema_name: None,
                 owner: None,
                 extra: None,
                 ascending: true,
@@ -851,6 +686,7 @@ mod tests {
             let search_param = SearchModelParam {
                 model_name: Some("model_2".to_string()),
                 domain_name: None,
+                schema_name: None,
                 owner: None,
                 extra: None,
                 ascending: true,
@@ -870,7 +706,8 @@ mod tests {
 
             let search_param = SearchModelParam {
                 model_name: None,
-                domain_name: Some("test".to_string()),
+                domain_name: Some("test_domain".to_string()),
+                schema_name: None,
                 owner: None,
                 extra: None,
                 ascending: true,
@@ -892,6 +729,7 @@ mod tests {
             let search_param = SearchModelParam {
                 model_name: None,
                 domain_name: None,
+                schema_name: None,
                 owner: Some("test_model%@test.com".to_string()),
                 extra: None,
                 ascending: true,
@@ -913,6 +751,7 @@ mod tests {
             let search_param = SearchModelParam {
                 model_name: None,
                 domain_name: None,
+                schema_name: None,
                 owner: None,
                 extra: Some("abc".to_string()),
                 ascending: true,
@@ -935,6 +774,7 @@ mod tests {
             let search_param = SearchModelParam {
                 model_name: None,
                 domain_name: None,
+                schema_name: None,
                 owner: None,
                 extra: None,
                 ascending: true,
@@ -955,6 +795,7 @@ mod tests {
             let search_param = SearchModelParam {
                 model_name: None,
                 domain_name: None,
+                schema_name: None,
                 owner: None,
                 extra: None,
                 ascending: true,

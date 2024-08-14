@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM\n            field\n        WHERE\n            schema_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1509d01ebf1ad6c90a1e2e8334f7cbbd856afcc662dd5450f736c847bfdd092a"
+}

@@ -1,0 +1,21 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE\n            model\n        SET \n            name = $1,\n            domain_id = $2,\n            schema_id = $3,\n            owner = $4,\n            extra = $5,\n            modified_by = $6,\n            modified_date = $7\n        WHERE\n            name = $8",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int4",
+        "Int4",
+        "Text",
+        "Jsonb",
+        "Text",
+        "Timestamptz",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1f3a6ec25bbcc20f40811fbfd5af5792dc56f02210f89ac4474b68c56c4e3567"
+}
