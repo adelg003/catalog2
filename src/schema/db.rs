@@ -278,7 +278,7 @@ pub async fn search_schema_select(
             modified_by,
             modified_date
         FROM
-            model",
+            schema",
     );
 
     // Should we add a WHERE statement?
