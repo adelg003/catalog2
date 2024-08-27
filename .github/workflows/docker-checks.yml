@@ -2,7 +2,8 @@ name: Docker Checks
 
 on:
   pull_request:
-    branches: ["main"]
+    branches:
+      - main
 
 jobs:
   docker-build-check:
@@ -11,4 +12,4 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Container Build Check
-        run: docker build . --file Containerfile --tag catalog2:$(date +%s)
+        run: docker build . --file Containerfile --tag catalog2:${{ github.sha }}
