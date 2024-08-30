@@ -1,0 +1,47 @@
+name: Trivy Checks
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  trivy-image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Container Build
+        run: docker build . --file Containerfile --tag catalog2:${{ github.sha }}
+      - name: Trivy Image Scan
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          scan-type: image
+          image-ref: "catalog2:${{ github.sha }}"
+          scanners: "vuln,misconfig,secret"
+          exit-code: "1"
+
+  trivy-repo:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Trivy Repo Scan
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          scan-type: repo
+          scan-ref: "."
+          scanners: "vuln,misconfig,secret"
+          exit-code: "1"
+          ignore-unfixed: true
+
+  trivy-license:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Trivy License Scan
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          scan-type: repo
+          scan-ref: "."
+          scanners: "license"
+          exit-code: "1"
+          severity: "MEDIUM,HIGH,CRITICAL"

@@ -1,11 +1,13 @@
-# Build image
-FROM rust:latest as builder
+#################
+## Build Image ##
+#################
+FROM rust:alpine as builder
 
-# Setup Node
-RUN apt update && apt install --yes npm
+# Setup dependencies
+RUN apk add --no-cache musl-dev npm
 
 # Copy files to build Rust Application
-WORKDIR /usr/src/myapp
+WORKDIR /opt/catalog2
 COPY ./build.rs ./build.rs
 COPY ./Cargo.* .
 COPY ./migrations ./migrations
@@ -17,11 +19,28 @@ COPY ./src ./src
 COPY ./templates ./templates
 
 # Build Rust Application
-RUN SQLX_OFFLINE=true cargo install --path . --locked
+RUN SQLX_OFFLINE=true cargo build --release --locked
 
-# Copy compiled binary to runtime image
-FROM debian:latest
-WORKDIR /opt/catalog2
-COPY --from=builder /usr/local/cargo/bin/catalog2 /usr/local/bin/catalog2
+
+###################
+## Runtime Image ##
+###################
+FROM alpine:3
+
+# Setup dependencies
+RUN apk add --no-cache alpine-conf curl
+
+# Setup Catalog2 User
+RUN setup-user catalog2
+USER catalog2
+WORKDIR /home/catalog2
+
+# Copy over complied runtime binary
+COPY --from=builder /opt/catalog2/target/release/catalog2 /usr/local/bin/catalog2
+
+# Setup Healthcheck
+HEALTHCHECK CMD curl --fail http://localhost:3000
+
+# Run Catalog2
 ENV RUST_BACKTRACE=full
 ENTRYPOINT ["catalog2"]
