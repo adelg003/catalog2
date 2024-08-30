@@ -29,8 +29,9 @@ jobs:
         with:
           scan-type: repo
           scan-ref: "."
-          scanners: "misconfig,secret"
+          scanners: "vuln,misconfig,secret"
           exit-code: "1"
+          ignore-unfixed: true
 
   trivy-license:
     runs-on: ubuntu-latest
