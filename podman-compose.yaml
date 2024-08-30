@@ -1,8 +1,6 @@
-version: "3"
-
 services:
   database:
-    image: "postgres:latest"
+    image: "postgres:alpine"
     ports:
       - "5432:5432"
     environment:
@@ -19,6 +17,8 @@ services:
     build:
       context: .
       dockerfile: "Containerfile"
+      args:
+        format: docker
     ports:
       - "3000:3000"
     environment:
@@ -31,12 +31,14 @@ services:
             "hash": "$$2b$$12$$QkHm2JiQg3WILPe0l/8Vqun7UVLqfSBLAzXiKbffGhs11RSqH7bjS"
           }
         ]
-      JWT_KEY: "N9&YMUGmNpP@dy$At6jv$CEoXRA5hEgNy%C3n4mVKQpDkJoFMZ5VxK#&e&7xrYrC5$nai73GE!dGKqxc"
+      SECERT_KEY: "N9&YMUGmNpP@dy$$At6jv$$CEoXRA5hEgNy%C3n4mVKQpDkJoFMZ5VxK#&e&7xrYrC5$$nai73GE!dGKqxc"
     networks:
       - catalog2
     depends_on:
       database:
         condition: "service_healthy"
+    healthcheck:
+      test: curl --fail http://localhost:3000
 
 volumes:
   catalog_postgresql:

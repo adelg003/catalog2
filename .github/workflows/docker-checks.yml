@@ -13,3 +13,31 @@ jobs:
       - uses: actions/checkout@v4
       - name: Container Build Check
         run: docker build . --file Containerfile --tag catalog2:${{ github.sha }}
+
+  docker-healthcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Container Build
+        run: docker compose --file podman-compose.yaml build
+      - name: Container Startup
+        run: docker compose --file podman-compose.yaml up --detach
+      - name: Check Healthcheck
+        run: |
+          # Wait for the pod to get a healthcheck
+          STATUS=$(docker inspect --format='{{json .State.Health.Status}}' catalog2_webserver_1)
+          while [ "$STATUS" = '"starting"' ]
+          do
+            echo "pod status: $STATUS - $(date)"
+            sleep 1
+            STATUS=$(docker inspect --format='{{json .State.Health.Status}}' catalog2_webserver_1)
+          done
+
+          # Is the pod healthy?
+          echo "pod status: $STATUS - $(date)"
+          if [ "$STATUS" = '"healthy"' ]
+          then
+            exit 0
+          else
+            exit 1
+          fi
