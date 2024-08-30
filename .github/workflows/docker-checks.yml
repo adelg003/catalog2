@@ -25,12 +25,12 @@ jobs:
       - name: Check Healthcheck
         run: |
           # Wait for the pod to get a healthcheck
-          STATUS=$(docker inspect --format='{{json .State.Health.Status}}' catalog2_webserver_1)
+          STATUS=$(docker inspect --format='{{json .State.Health.Status}}' catalog2-webserver-1)
           while [ "$STATUS" = '"starting"' ]
           do
             echo "pod status: $STATUS - $(date)"
             sleep 1
-            STATUS=$(docker inspect --format='{{json .State.Health.Status}}' catalog2_webserver_1)
+            STATUS=$(docker inspect --format='{{json .State.Health.Status}}' catalog2-webserver-1)
           done
 
           # Is the pod healthy?
