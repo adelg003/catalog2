@@ -11,6 +11,8 @@ services:
       - "catalog_postgresql:/var/lib/postgresql/data"
     networks:
       - catalog2
+    healthcheck:
+      test: pg_isready
 
   webserver:
     image: "catalog2:latest"
@@ -34,11 +36,11 @@ services:
       SECERT_KEY: "N9&YMUGmNpP@dy$$At6jv$$CEoXRA5hEgNy%C3n4mVKQpDkJoFMZ5VxK#&e&7xrYrC5$$nai73GE!dGKqxc"
     networks:
       - catalog2
+    healthcheck:
+      test: curl --fail http://localhost:3000
     depends_on:
       database:
         condition: "service_healthy"
-    healthcheck:
-      test: curl --fail http://localhost:3000
 
 volumes:
   catalog_postgresql:
