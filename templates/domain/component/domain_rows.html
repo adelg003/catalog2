@@ -1,0 +1,30 @@
+{% for domain in domains %}
+<tr id="row_{{ domain.id }}">
+  <td>{{ domain.id }}</td>
+  <td>{{ domain.name }}</td>
+  <td>{{ domain.owner }}</td>
+  <td>{{ domain.extra }}</td>
+</tr>
+{% endfor %}
+
+<!-- prettier-ignore -->
+{% if let Some(next_page) = next_page %}
+<!-- Pagination Placeholder -->
+<tr
+  id="domain_pagination"
+  hx-get="/domain/search/rows?page={{ next_page }}&ascending={{ params.ascending }}{%
+    if let Some(domain_name) = params.domain_name
+      %}&domain_name={{ domain_name }}{%
+    endif %}{%
+    if let Some(owner) = params.owner
+      %}&owner={{ owner }}{%
+    endif %}{%
+    if let Some(extra) = params.extra
+      %}&extra={{ extra }}{%
+    endif
+  %}"
+  hx-trigger="revealed"
+  hx-swap="outerHTML"
+  hx-target="#domain_pagination"
+></tr>
+{% endif %}

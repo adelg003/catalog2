@@ -24,7 +24,7 @@ async fn index(session: &Session) -> Result<Html<String>, poem::Error> {
     let username: Option<String> = session.get("username");
 
     // Render landing page
-    let index = Index {
+    let index: String = Index {
         navbar: Navbar { username },
     }
     .render()

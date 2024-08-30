@@ -169,9 +169,9 @@ pub async fn model_drop(
 /// Pull multiple models that match the criteria
 pub async fn search_model_select(
     tx: &mut Transaction<'_, Postgres>,
-    search_param: &SearchModelParam,
-    limit: &Option<u64>,
-    offset: &Option<u64>,
+    params: &SearchModelParam,
+    limit: &u64,
+    offset: &u64,
 ) -> Result<Vec<Model>, sqlx::Error> {
     // Query we will be modifying
     let mut query = QueryBuilder::<'_, Postgres>::new(
@@ -201,11 +201,11 @@ pub async fn search_model_select(
     );
 
     // Should we add a WHERE statement?
-    if search_param.model_name.is_some()
-        || search_param.domain_name.is_some()
-        || search_param.schema_name.is_some()
-        || search_param.owner.is_some()
-        || search_param.extra.is_some()
+    if params.model_name.is_some()
+        || params.domain_name.is_some()
+        || params.schema_name.is_some()
+        || params.owner.is_some()
+        || params.extra.is_some()
     {
         query.push(" WHERE ");
 
@@ -213,35 +213,31 @@ pub async fn search_model_select(
         let mut separated = query.separated(" AND ");
 
         // Fuzzy search
-        if let Some(model_name) = &search_param.model_name {
+        if let Some(model_name) = &params.model_name {
             separated.push(format!("model.name ILIKE '%{model_name}%'"));
         }
-        if let Some(domain_name) = &search_param.domain_name {
+        if let Some(domain_name) = &params.domain_name {
             separated.push(format!("domain.name ILIKE '%{domain_name}%'"));
         }
-        if let Some(schema_name) = &search_param.schema_name {
+        if let Some(schema_name) = &params.schema_name {
             separated.push(format!("schema.name ILIKE '%{schema_name}%'"));
         }
-        if let Some(owner) = &search_param.owner {
+        if let Some(owner) = &params.owner {
             separated.push(format!("model.owner ILIKE '%{owner}%'"));
         }
-        if let Some(extra) = &search_param.extra {
+        if let Some(extra) = &params.extra {
             separated.push(format!("model.extra::text ILIKE '%{extra}%'"));
         }
     }
 
     // Add ORDER BY
-    query.push(" ORDER BY model.id ");
+    match &params.ascending {
+        true => query.push(" ORDER BY id "),
+        false => query.push(" ORDER BY id DESC"),
+    };
 
-    // Add LIMIT
-    if let Some(limit) = limit {
-        query.push(format!(" LIMIT {limit} "));
-
-        // Add OFFSET
-        if let Some(offset) = offset {
-            query.push(format!(" OFFSET {offset} "));
-        }
-    }
+    // Add LIMIT and OFFSET
+    query.push(format!(" LIMIT {limit} OFFSET {offset} "));
 
     // Run our generated SQL statement
     let model = query.build_query_as::<Model>().fetch_all(&mut **tx).await?;
@@ -254,9 +250,12 @@ mod tests {
     use super::*;
     use crate::{
         model::util::test_utils::gen_test_model_param,
-        util::test_utils::{
-            gen_test_domain_json, gen_test_model_json, gen_test_schema_json, post_test_domain,
-            post_test_model, post_test_schema,
+        util::{
+            test_utils::{
+                gen_test_domain_json, gen_test_model_json, gen_test_schema_json, post_test_domain,
+                post_test_model, post_test_schema,
+            },
+            PAGE_SIZE,
         },
     };
     use pretty_assertions::assert_eq;
@@ -627,9 +626,11 @@ mod tests {
                 schema_name: None,
                 owner: None,
                 extra: None,
+                ascending: true,
+                page: 0,
             };
 
-            let models = search_model_select(&mut tx, &search_param, &None, &None)
+            let models = search_model_select(&mut tx, &search_param, &PAGE_SIZE, &0)
                 .await
                 .unwrap();
 
@@ -648,9 +649,11 @@ mod tests {
                 schema_name: None,
                 owner: None,
                 extra: None,
+                ascending: true,
+                page: 0,
             };
 
-            let models = search_model_select(&mut tx, &search_param, &None, &None)
+            let models = search_model_select(&mut tx, &search_param, &PAGE_SIZE, &0)
                 .await
                 .unwrap();
 
@@ -666,9 +669,11 @@ mod tests {
                 schema_name: None,
                 owner: None,
                 extra: None,
+                ascending: true,
+                page: 0,
             };
 
-            let models = search_model_select(&mut tx, &search_param, &None, &None)
+            let models = search_model_select(&mut tx, &search_param, &PAGE_SIZE, &0)
                 .await
                 .unwrap();
 
@@ -687,9 +692,11 @@ mod tests {
                 schema_name: None,
                 owner: None,
                 extra: None,
+                ascending: true,
+                page: 0,
             };
 
-            let models = search_model_select(&mut tx, &search_param, &None, &None)
+            let models = search_model_select(&mut tx, &search_param, &PAGE_SIZE, &0)
                 .await
                 .unwrap();
 
@@ -706,9 +713,11 @@ mod tests {
                 schema_name: None,
                 owner: None,
                 extra: None,
+                ascending: true,
+                page: 0,
             };
 
-            let models = search_model_select(&mut tx, &search_param, &None, &None)
+            let models = search_model_select(&mut tx, &search_param, &PAGE_SIZE, &0)
                 .await
                 .unwrap();
 
@@ -726,9 +735,11 @@ mod tests {
                 schema_name: None,
                 owner: Some("test_model%@test.com".to_string()),
                 extra: None,
+                ascending: true,
+                page: 0,
             };
 
-            let models = search_model_select(&mut tx, &search_param, &None, &None)
+            let models = search_model_select(&mut tx, &search_param, &PAGE_SIZE, &0)
                 .await
                 .unwrap();
 
@@ -746,9 +757,11 @@ mod tests {
                 schema_name: None,
                 owner: None,
                 extra: Some("abc".to_string()),
+                ascending: true,
+                page: 0,
             };
 
-            let models = search_model_select(&mut tx, &search_param, &None, &None)
+            let models = search_model_select(&mut tx, &search_param, &PAGE_SIZE, &0)
                 .await
                 .unwrap();
 
@@ -767,9 +780,11 @@ mod tests {
                 schema_name: None,
                 owner: None,
                 extra: None,
+                ascending: true,
+                page: 0,
             };
 
-            let models = search_model_select(&mut tx, &search_param, &Some(1), &None)
+            let models = search_model_select(&mut tx, &search_param, &1, &0)
                 .await
                 .unwrap();
 
@@ -786,9 +801,11 @@ mod tests {
                 schema_name: None,
                 owner: None,
                 extra: None,
+                ascending: true,
+                page: 0,
             };
 
-            let models = search_model_select(&mut tx, &search_param, &Some(1), &Some(1))
+            let models = search_model_select(&mut tx, &search_param, &1, &1)
                 .await
                 .unwrap();
 

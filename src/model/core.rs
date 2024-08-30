@@ -66,6 +66,8 @@ pub struct SearchModelParam {
     pub schema_name: Option<String>,
     pub owner: Option<String>,
     pub extra: Option<String>,
+    pub ascending: bool,
+    pub page: u64,
 }
 
 /// Add a model
@@ -161,30 +163,26 @@ pub async fn model_read_with_children(
 /// Read details of many models
 pub async fn search_model_read(
     tx: &mut Transaction<'_, Postgres>,
-    search_param: &SearchModelParam,
-    page: &u64,
+    params: &SearchModelParam,
 ) -> Result<SearchModel, poem::Error> {
+    let page: u64 = params.page;
     // Compute offset
     let offset = page * PAGE_SIZE;
     let next_offset = (page + 1) * PAGE_SIZE;
 
     // Pull the Models
-    let models = search_model_select(tx, search_param, &Some(PAGE_SIZE), &Some(offset))
+    let models = search_model_select(tx, params, &PAGE_SIZE, &offset)
         .await
         .map_err(InternalServerError)?;
 
     // More models present?
-    let next_model = search_model_select(tx, search_param, &Some(PAGE_SIZE), &Some(next_offset))
+    let next_model = search_model_select(tx, params, &PAGE_SIZE, &next_offset)
         .await
         .map_err(InternalServerError)?;
 
     let more = !next_model.is_empty();
 
-    Ok(SearchModel {
-        models,
-        page: *page,
-        more,
-    })
+    Ok(SearchModel { models, page, more })
 }
 
 #[cfg(test)]
@@ -561,9 +559,11 @@ mod tests {
                 schema_name: None,
                 owner: None,
                 extra: None,
+                ascending: true,
+                page: 0,
             };
 
-            let search = search_model_read(&mut tx, &search_param, &0).await.unwrap();
+            let search = search_model_read(&mut tx, &search_param).await.unwrap();
 
             assert_eq!(search.models.len(), 50);
             assert_eq!(search.page, 0);
@@ -579,9 +579,11 @@ mod tests {
                 schema_name: None,
                 owner: None,
                 extra: None,
+                ascending: true,
+                page: 1,
             };
 
-            let search = search_model_read(&mut tx, &search_param, &1).await.unwrap();
+            let search = search_model_read(&mut tx, &search_param).await.unwrap();
 
             assert_eq!(search.models.len(), 1);
             assert_eq!(search.page, 1);
@@ -597,9 +599,11 @@ mod tests {
                 schema_name: None,
                 owner: None,
                 extra: None,
+                ascending: true,
+                page: 0,
             };
 
-            let search = search_model_read(&mut tx, &search_param, &0).await.unwrap();
+            let search = search_model_read(&mut tx, &search_param).await.unwrap();
 
             assert_eq!(search.models.len(), 50);
             assert_eq!(search.page, 0);
@@ -615,9 +619,11 @@ mod tests {
                 schema_name: None,
                 owner: None,
                 extra: None,
+                ascending: true,
+                page: 0,
             };
 
-            let search = search_model_read(&mut tx, &search_param, &0).await.unwrap();
+            let search = search_model_read(&mut tx, &search_param).await.unwrap();
 
             assert_eq!(search.models.len(), 0);
             assert_eq!(search.page, 0);
@@ -633,9 +639,11 @@ mod tests {
                 schema_name: None,
                 owner: None,
                 extra: None,
+                ascending: true,
+                page: 0,
             };
 
-            let search = search_model_read(&mut tx, &search_param, &0).await.unwrap();
+            let search = search_model_read(&mut tx, &search_param).await.unwrap();
 
             assert_eq!(search.models.len(), 1);
             assert_eq!(search.models[0].name, "foobar_model");
@@ -650,9 +658,11 @@ mod tests {
                 schema_name: None,
                 owner: None,
                 extra: None,
+                ascending: true,
+                page: 0,
             };
 
-            let search = search_model_read(&mut tx, &search_param, &0).await.unwrap();
+            let search = search_model_read(&mut tx, &search_param).await.unwrap();
 
             assert_eq!(search.models.len(), 50);
             assert_eq!(search.page, 0);
@@ -668,9 +678,11 @@ mod tests {
                 schema_name: None,
                 owner: Some("test.com".to_string()),
                 extra: None,
+                ascending: true,
+                page: 0,
             };
 
-            let search = search_model_read(&mut tx, &search_param, &0).await.unwrap();
+            let search = search_model_read(&mut tx, &search_param).await.unwrap();
 
             assert_eq!(search.models.len(), 1);
             assert_eq!(search.models[0].name, "foobar_model");
@@ -687,9 +699,11 @@ mod tests {
                 schema_name: None,
                 owner: Some("test.com".to_string()),
                 extra: Some("abc".to_string()),
+                ascending: true,
+                page: 0,
             };
 
-            let search = search_model_read(&mut tx, &search_param, &0).await.unwrap();
+            let search = search_model_read(&mut tx, &search_param).await.unwrap();
 
             assert_eq!(search.models.len(), 1);
             assert_eq!(search.models[0].name, "foobar_model");

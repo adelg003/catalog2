@@ -1,9 +1,11 @@
 mod api;
+mod component;
 mod core;
 mod page;
+mod route;
 
 pub use crate::auth::{
     api::AuthApi,
-    core::{Auth, TokenAuth, UserCred},
-    page::route,
+    core::{has_ui_access, Auth, TokenAuth, UserCred},
+    route::route,
 };

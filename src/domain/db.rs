@@ -230,9 +230,9 @@ pub async fn pack_select_by_domain(
 /// Pull multiple domains that match by criteria
 pub async fn search_domain_select(
     tx: &mut Transaction<'_, Postgres>,
-    search_param: &SearchDomainParam,
-    limit: &Option<u64>,
-    offset: &Option<u64>,
+    params: &SearchDomainParam,
+    limit: &u64,
+    offset: &u64,
 ) -> Result<Vec<Domain>, sqlx::Error> {
     // Query we will be modifying
     let mut query = QueryBuilder::<'_, Postgres>::new(
@@ -250,39 +250,32 @@ pub async fn search_domain_select(
     );
 
     // Should we add a WHERE statement?
-    if search_param.domain_name.is_some()
-        || search_param.owner.is_some()
-        || search_param.extra.is_some()
-    {
+    if params.domain_name.is_some() || params.owner.is_some() || params.extra.is_some() {
         query.push(" WHERE ");
 
         // Start building the WHERE statement with the "AND" separating the condition.
         let mut separated = query.separated(" AND ");
 
         // Fuzzy search
-        if let Some(domain_name) = &search_param.domain_name {
+        if let Some(domain_name) = &params.domain_name {
             separated.push(format!("name ILIKE '%{domain_name}%'"));
         }
-        if let Some(owner) = &search_param.owner {
+        if let Some(owner) = &params.owner {
             separated.push(format!("owner ILIKE '%{owner}%'"));
         }
-        if let Some(extra) = &search_param.extra {
+        if let Some(extra) = &params.extra {
             separated.push(format!("extra::text ILIKE '%{extra}%'"));
         }
     }
 
     // Add ORDER BY
-    query.push(" ORDER BY id ");
+    match &params.ascending {
+        true => query.push(" ORDER BY id "),
+        false => query.push(" ORDER BY id DESC"),
+    };
 
-    // Add LIMIT
-    if let Some(limit) = limit {
-        query.push(format!(" LIMIT {limit} "));
-
-        // Add OFFSET
-        if let Some(offset) = offset {
-            query.push(format!(" OFFSET {offset} "));
-        }
-    }
+    // Add LIMIT and OFFSET
+    query.push(format!(" LIMIT {limit} OFFSET {offset} "));
 
     // Run our generated SQL statement
     let domain = query
@@ -298,9 +291,12 @@ mod tests {
     use super::*;
     use crate::{
         domain::util::test_utils::gen_test_domain_param,
-        util::test_utils::{
-            gen_test_domain_json, gen_test_model_json, gen_test_schema_json, post_test_domain,
-            post_test_model, post_test_schema,
+        util::{
+            test_utils::{
+                gen_test_domain_json, gen_test_model_json, gen_test_schema_json, post_test_domain,
+                post_test_model, post_test_schema,
+            },
+            PAGE_SIZE,
         },
     };
     use pretty_assertions::assert_eq;
@@ -634,9 +630,11 @@ mod tests {
                 domain_name: None,
                 owner: None,
                 extra: None,
+                ascending: true,
+                page: 0,
             };
 
-            let domains = search_domain_select(&mut tx, &search_param, &None, &None)
+            let domains = search_domain_select(&mut tx, &search_param, &PAGE_SIZE, &0)
                 .await
                 .unwrap();
 
@@ -650,9 +648,11 @@ mod tests {
                 domain_name: Some("abcdef".to_string()),
                 owner: None,
                 extra: None,
+                ascending: true,
+                page: 0,
             };
 
-            let domains = search_domain_select(&mut tx, &search_param, &None, &None)
+            let domains = search_domain_select(&mut tx, &search_param, &PAGE_SIZE, &0)
                 .await
                 .unwrap();
 
@@ -666,9 +666,11 @@ mod tests {
                 domain_name: Some("test_domain".to_string()),
                 owner: None,
                 extra: None,
+                ascending: true,
+                page: 0,
             };
 
-            let domains = search_domain_select(&mut tx, &search_param, &None, &None)
+            let domains = search_domain_select(&mut tx, &search_param, &PAGE_SIZE, &0)
                 .await
                 .unwrap();
 
@@ -683,9 +685,11 @@ mod tests {
                 domain_name: Some("test_domain".to_string()),
                 owner: Some("test.com".to_string()),
                 extra: None,
+                ascending: true,
+                page: 0,
             };
 
-            let domains = search_domain_select(&mut tx, &search_param, &None, &None)
+            let domains = search_domain_select(&mut tx, &search_param, &PAGE_SIZE, &0)
                 .await
                 .unwrap();
 
@@ -700,9 +704,11 @@ mod tests {
                 domain_name: Some("test_domain".to_string()),
                 owner: Some("test.com".to_string()),
                 extra: Some("abc".to_string()),
+                ascending: true,
+                page: 0,
             };
 
-            let domains = search_domain_select(&mut tx, &search_param, &None, &None)
+            let domains = search_domain_select(&mut tx, &search_param, &PAGE_SIZE, &0)
                 .await
                 .unwrap();
 
@@ -717,9 +723,11 @@ mod tests {
                 domain_name: None,
                 owner: None,
                 extra: None,
+                ascending: true,
+                page: 0,
             };
 
-            let domains = search_domain_select(&mut tx, &search_param, &Some(1), &None)
+            let domains = search_domain_select(&mut tx, &search_param, &1, &0)
                 .await
                 .unwrap();
 
@@ -734,9 +742,11 @@ mod tests {
                 domain_name: None,
                 owner: None,
                 extra: None,
+                ascending: true,
+                page: 0,
             };
 
-            let domains = search_domain_select(&mut tx, &search_param, &Some(1), &Some(1))
+            let domains = search_domain_select(&mut tx, &search_param, &1, &1)
                 .await
                 .unwrap();
 

@@ -70,6 +70,7 @@ async fn main() -> Result<(), eyre::Error> {
         // User friendly locations
         .at("/", index::route())
         .nest("/auth", auth::route())
+        .nest("/domain", domain::route())
         // Global context to be shared
         .data(pool)
         .data(user_creds)
