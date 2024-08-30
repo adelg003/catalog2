@@ -8,4 +8,4 @@ podman run \
   --env POSTGRES_DB=catalog2 \
   --volume catalog_postgresql:/var/lib/postgresql/data \
   --publish 5432:5432 \
-  docker.io/library/postgres:latest
+  docker.io/library/postgres:alpine

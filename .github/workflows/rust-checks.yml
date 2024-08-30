@@ -2,7 +2,8 @@ name: Rust Checks
 
 on:
   pull_request:
-    branches: ["main"]
+    branches:
+      - main
 
 env:
   CARGO_TERM_COLOR: always
@@ -49,7 +50,7 @@ jobs:
       - name: Tests
         run: cargo test --locked
 
-  rust-sqlx-cache-check:
+  rust-sqlx-cache:
     runs-on: ubuntu-latest
     services:
       postgres:

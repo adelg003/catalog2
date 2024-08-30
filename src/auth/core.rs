@@ -299,7 +299,7 @@ mod tests {
             .finish();
 
         let api_key = ApiKey {
-            key: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c".to_string(),
+            key: "invalid-token".to_string(),
         };
 
         let checked = token_checker(&req, api_key).await;

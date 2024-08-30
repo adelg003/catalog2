@@ -3,7 +3,7 @@ use crate::{
         dependencies_drop, dependencies_select, dependency_drop, dependency_insert,
         dependency_select, dependency_update,
     },
-    graph::graph_dependencies,
+    graph::graph_node_dependencies,
 };
 use chrono::{DateTime, Utc};
 use poem::{
@@ -92,7 +92,7 @@ pub async fn dependency_add(
     };
 
     // Check if updates dependency graph is valid.
-    graph_dependencies(tx, dependency_type, node_name, &None, &None).await?;
+    graph_node_dependencies(tx, dependency_type, node_name, &None, &None).await?;
 
     Ok(dependency)
 }
@@ -144,7 +144,7 @@ pub async fn dependency_edit(
     };
 
     // Check if updates dependency graph is valid.
-    graph_dependencies(tx, dependency_type, node_name, &None, &None).await?;
+    graph_node_dependencies(tx, dependency_type, node_name, &None, &None).await?;
 
     Ok(dependency)
 }
